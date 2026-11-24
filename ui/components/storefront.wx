@@ -1,0 +1,580 @@
+import type { Html as RawHtml } from "@weft-framework/runtime";
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { Icon } from "./icons.wx";
+
+export interface SiteLink {
+  label: string;
+  href: string;
+}
+
+export interface SitePlan {
+  id: string;
+  name: string;
+  tagline: string;
+  features: string[];
+  price: string;
+  cycle: string;
+  setup: string;
+  href: string;
+  highlight: boolean;
+  soldOut: boolean;
+}
+
+export interface SiteTld {
+  tld: string;
+  price: string;
+}
+
+export interface SiteItem {
+  icon: string;
+  title: string;
+  body: string;
+  value: string;
+}
+
+export interface SiteBlock {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  rich: RawHtml | null;
+  image: string;
+  imageAlt: string;
+  imageSet: string;
+  search: boolean;
+  primary: SiteLink | null;
+  secondary: SiteLink | null;
+  plans: SitePlan[];
+  tlds: SiteTld[];
+  items: SiteItem[];
+  tone: string;
+  reviews: SiteReviews | null;
+}
+
+export interface SiteReviews {
+  score: number;
+  stars: number;
+  total: number;
+  url: string;
+  reviews: { stars: number; title: string; text: string; author: string; date: number }[];
+}
+
+export interface SiteLabels {
+  searchLabel: string;
+  searchPlaceholder: string;
+  searchSubmit: string;
+  from: string;
+  order: string;
+  soldOut: string;
+  popular: string;
+  setup: string;
+  noPlans: string;
+  menu: string;
+  perYear: string;
+  skip: string;
+  reviewsSummary: string;
+  reviewsLink: string;
+}
+
+export interface SiteNav {
+  brand: string;
+  logo: string;
+  links: SiteLink[];
+  actions: SiteLink[];
+  primary: SiteLink | null;
+  cart: SiteLink | null;
+  cartCount: number;
+}
+
+export interface SiteFooterData {
+  brand: string;
+  tagline: string;
+  columns: { title: string; links: SiteLink[] }[];
+  legal: SiteLink[];
+  payments: string[];
+  social: SiteLink[];
+  prefs: SitePrefs | null;
+  note: string;
+}
+
+export interface SitePrefs {
+  action: string;
+  next: string;
+  locale: string;
+  locales: { code: string; label: string }[];
+  currency: string;
+  currencies: string[];
+  labels: { language: string; currency: string; apply: string; payments: string; social: string };
+}
+
+export function toneClass(tone: string): string {
+  if (tone === "muted") return "bg-muted/50";
+  if (tone === "primary") return "bg-primary text-primary-foreground";
+  return "bg-background";
+}
+
+component SiteHeader(nav: SiteNav, labels: SiteLabels, path: string) {
+  view {
+    <header class="bg-background/85 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-40 border-b backdrop-blur">
+      <div class="mx-auto flex h-16 max-w-[var(--container,80rem)] items-center gap-6 px-4 sm:px-6 lg:px-8">
+        <a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight">
+          {#if nav.logo}
+            <img src={nav.logo} alt="" class="h-7 w-auto" />
+          {:else}
+            <span class="bg-primary text-primary-foreground grid size-8 place-items-center rounded-lg text-sm font-bold">{nav.brand.slice(0, 1)}</span>
+          {/if}
+          <span class="text-[15px]">{nav.brand}</span>
+        </a>
+        <nav aria-label={nav.brand} class="hidden flex-1 items-center gap-1 lg:flex">
+          {#each nav.links as l (l.href)}
+            <a href={l.href} aria-current={path === l.href ? "page" : undefined} class={cn("text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-3 py-2 text-sm font-medium transition-colors", path === l.href ? "text-foreground" : "")}>{l.label}</a>
+          {/each}
+        </nav>
+        <div class="ms-auto hidden items-center gap-2 lg:flex">
+          {#each nav.actions as a (a.href)}
+            <a href={a.href} class={buttonVariants({ variant: "ghost", size: "sm" })}>{a.label}</a>
+          {/each}
+          {#if nav.cart}
+            <a href={nav.cart.href} class={buttonVariants({ variant: "outline", size: "sm" }) + " gap-2"}>
+              <Icon name="credit-card" />
+              {nav.cart.label}
+              {#if nav.cartCount > 0}
+                <span class="bg-primary text-primary-foreground rounded-full px-1.5 text-xs tabular-nums">{nav.cartCount}</span>
+              {/if}
+            </a>
+          {/if}
+          {#if nav.primary}
+            <a href={nav.primary.href} class={buttonVariants({ size: "sm" })}>{nav.primary.label}</a>
+          {/if}
+        </div>
+        <details class="group relative ms-auto lg:hidden">
+          <summary class={buttonVariants({ variant: "ghost", size: "icon" }) + " list-none [&::-webkit-details-marker]:hidden"} aria-label={labels.menu}><Icon name="menu" /></summary>
+          <div class="bg-popover text-popover-foreground absolute end-0 top-11 flex w-64 flex-col gap-1 rounded-xl border p-2 shadow-lg">
+            {#each nav.links as l (l.href)}
+              <a href={l.href} class="hover:bg-muted rounded-md px-3 py-2 text-sm">{l.label}</a>
+            {/each}
+            <div class="my-1 border-t"></div>
+            {#each nav.actions as a (a.href)}
+              <a href={a.href} class="hover:bg-muted rounded-md px-3 py-2 text-sm">{a.label}</a>
+            {/each}
+            {#if nav.cart}
+              <a href={nav.cart.href} class="hover:bg-muted flex items-center justify-between rounded-md px-3 py-2 text-sm">{nav.cart.label}<span class="tabular-nums">{nav.cartCount}</span></a>
+            {/if}
+            {#if nav.primary}
+              <a href={nav.primary.href} class={buttonVariants({ size: "sm" }) + " mt-1"}>{nav.primary.label}</a>
+            {/if}
+          </div>
+        </details>
+      </div>
+    </header>
+  }
+}
+
+component SiteFooter(footer: SiteFooterData) {
+  derived curLocale = footer.prefs ? footer.prefs.locale : ""
+  derived curCurrency = footer.prefs ? footer.prefs.currency : ""
+  view {
+    <footer class="bg-muted/40 border-t">
+      <div class="mx-auto grid max-w-[var(--container,80rem)] gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)] lg:px-8">
+        <div class="flex flex-col gap-3">
+          <span class="text-base font-semibold tracking-tight">{footer.brand}</span>
+          {#if footer.tagline}
+            <p class="text-muted-foreground max-w-xs text-sm leading-relaxed">{footer.tagline}</p>
+          {/if}
+        </div>
+        {#each footer.columns as c (c.title)}
+          <div class="flex flex-col gap-3">
+            <span class="text-sm font-medium">{c.title}</span>
+            <ul class="flex flex-col gap-2">
+              {#each c.links as l (l.href)}
+                <li><a href={l.href} class="text-muted-foreground hover:text-foreground text-sm transition-colors">{l.label}</a></li>
+              {/each}
+            </ul>
+          </div>
+        {/each}
+      </div>
+      {#if footer.payments.length > 0 || footer.social.length > 0}
+        <div class="mx-auto flex max-w-[var(--container,80rem)] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 pb-8 sm:px-6 lg:px-8">
+          {#if footer.payments.length > 0}
+            <ul class="flex flex-wrap items-center gap-2" aria-label={footer.prefs ? footer.prefs.labels.payments : "Payment methods"}>
+              {#each footer.payments as p (p)}
+                <li class="bg-background text-muted-foreground rounded-md border px-2.5 py-1 text-xs font-medium">{p}</li>
+              {/each}
+            </ul>
+          {/if}
+          {#if footer.social.length > 0}
+            <nav class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" aria-label={footer.prefs ? footer.prefs.labels.social : "Social"}>
+              {#each footer.social as l (l.href)}
+                <a href={l.href} rel="noopener me" target="_blank" class="text-muted-foreground hover:text-foreground transition-colors">{l.label}</a>
+              {/each}
+            </nav>
+          {/if}
+        </div>
+      {/if}
+      <div class="border-t">
+        <div class="text-muted-foreground mx-auto flex max-w-[var(--container,80rem)] flex-col gap-4 px-4 py-5 text-xs sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+          <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
+            <span>{footer.note}</span>
+            {#if footer.legal.length > 0}
+              <nav aria-label="Legal" class="flex flex-wrap gap-x-5 gap-y-2">
+                {#each footer.legal as l (l.href)}
+                  <a href={l.href} class="hover:text-foreground transition-colors">{l.label}</a>
+                {/each}
+              </nav>
+            {/if}
+          </div>
+          {#if footer.prefs}
+            <form method="get" action={footer.prefs.action} class="flex flex-wrap items-center gap-1.5">
+              <input type="hidden" name="next" value={footer.prefs.next} />
+              <Icon name="globe" class="text-muted-foreground size-3.5" />
+              <select name="locale" aria-label={footer.prefs.labels.language} class="text-foreground hover:bg-accent h-7 cursor-pointer rounded-md border-0 bg-transparent px-1.5 text-xs">
+                {#each footer.prefs.locales as l (l.code)}
+                  <option value={l.code} selected={l.code === curLocale}>{l.label}</option>
+                {/each}
+              </select>
+              {#if footer.prefs.currencies.length > 1}
+                <span aria-hidden="true" class="bg-border h-4 w-px"></span>
+                <select name="currency" aria-label={footer.prefs.labels.currency} class="text-foreground hover:bg-accent h-7 cursor-pointer rounded-md border-0 bg-transparent px-1.5 text-xs">
+                  {#each footer.prefs.currencies as c (c)}
+                    <option value={c} selected={c === curCurrency}>{c}</option>
+                  {/each}
+                </select>
+              {/if}
+              <button class={buttonVariants({ variant: "ghost", size: "sm" }) + " h-7 px-2 text-xs"}>{footer.prefs.labels.apply}</button>
+            </form>
+          {/if}
+        </div>
+      </div>
+    </footer>
+  }
+}
+
+component DomainSearchBar(labels: SiteLabels, target: string, inverted?: boolean) {
+  derived field = inverted ? "bg-background text-foreground" : "bg-background"
+  view {
+    <form method="get" action={target || undefined} role="search" class={cn("flex w-full max-w-2xl flex-col gap-2 rounded-2xl border p-2 sm:flex-row sm:items-center", field)}>
+      <label for="site-domain-q" class="sr-only">{labels.searchLabel}</label>
+      <div class="flex flex-1 items-center gap-2 px-3">
+        <Icon name="globe" class="text-muted-foreground size-5" />
+        <input id="site-domain-q" name="q" type="search" autocomplete="off" spellcheck="false" placeholder={labels.searchPlaceholder} class="placeholder:text-muted-foreground h-11 w-full bg-transparent text-base outline-none" />
+      </div>
+      <button class={buttonVariants({ size: "lg" }) + " gap-2 sm:px-6"}><Icon name="search" />{labels.searchSubmit}</button>
+    </form>
+  }
+}
+
+component SiteHeading(title: string, body: string, center?: boolean) {
+  view {
+    {#if title || body}
+      <div class={cn("flex max-w-3xl flex-col gap-3", center ? "mx-auto items-center text-center" : "")}>
+        {#if title}
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h2>
+        {/if}
+        {#if body}
+          <p class="text-muted-foreground text-base leading-relaxed text-pretty sm:text-lg">{body}</p>
+        {/if}
+      </div>
+    {/if}
+  }
+}
+
+component HeroBlock(block: SiteBlock, labels: SiteLabels, searchAction: string) {
+  derived primary = block.tone === "primary"
+  view {
+    <section class={cn("relative overflow-hidden border-b", primary ? "bg-primary text-primary-foreground" : "bg-muted/30")}>
+      <div class="mx-auto grid max-w-[var(--container,80rem)] items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.15fr_1fr] lg:px-8 lg:py-28">
+        <div class="flex flex-col items-start gap-6">
+          <h1 class="text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">{block.title}</h1>
+          {#if block.body}
+            <p class={cn("max-w-xl text-lg leading-relaxed text-pretty", primary ? "text-primary-foreground/85" : "text-muted-foreground")}>{block.body}</p>
+          {/if}
+          {#if block.search}
+            <DomainSearchBar labels={labels} target={searchAction} inverted={primary} />
+          {/if}
+          {#if block.primary || block.secondary}
+            <div class="flex flex-wrap gap-3">
+              {#if block.primary}
+                <a href={block.primary.href} class={buttonVariants({ size: "lg", variant: primary ? "secondary" : "default" }) + " gap-2"}>{block.primary.label}<Icon name="arrow-right" /></a>
+              {/if}
+              {#if block.secondary}
+                <a href={block.secondary.href} class={buttonVariants({ size: "lg", variant: "outline" }) + (primary ? " text-foreground" : "")}>{block.secondary.label}</a>
+              {/if}
+            </div>
+          {/if}
+        </div>
+        {#if block.image}
+          <div class="relative hidden lg:block">
+            <img src={block.image} srcset={block.imageSet || undefined} sizes={block.imageSet ? "(min-width: 1024px) 50vw, 100vw" : undefined} alt={block.imageAlt} decoding="async" class="aspect-[4/3] w-full rounded-2xl border object-cover" />
+          </div>
+        {:else if block.items.length > 0}
+          <ul class="hidden gap-3 lg:grid">
+            {#each block.items as it, i (i)}
+              <li class={cn("flex items-start gap-4 rounded-2xl border p-4", primary ? "border-primary-foreground/20 bg-primary-foreground/5" : "bg-card")}>
+                <span class={cn("grid size-10 shrink-0 place-items-center rounded-lg", primary ? "bg-primary-foreground/15" : "bg-primary/10 text-primary")}><Icon name={it.icon} class="size-5" /></span>
+                <span class="flex flex-col gap-0.5">
+                  <span class="font-medium">{it.title}</span>
+                  {#if it.body}<span class={cn("text-sm", primary ? "text-primary-foreground/75" : "text-muted-foreground")}>{it.body}</span>{/if}
+                </span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    </section>
+  }
+}
+
+component PlanCard(plan: SitePlan, labels: SiteLabels) {
+  view {
+    <article class={cn("bg-card text-card-foreground relative flex flex-col rounded-2xl border p-6 transition-colors hover:border-primary/30", plan.highlight ? "border-primary ring-primary ring-1" : "")}>
+      {#if plan.highlight}
+        <span class="bg-primary text-primary-foreground absolute -top-3 start-6 rounded-full px-3 py-0.5 text-xs font-medium">{labels.popular}</span>
+      {/if}
+      <h3 class="text-lg font-semibold tracking-tight">{plan.name}</h3>
+      {#if plan.tagline}
+        <p class="text-muted-foreground mt-1 text-sm leading-relaxed">{plan.tagline}</p>
+      {/if}
+      <div class="mt-6 flex items-baseline gap-1.5">
+        {#if plan.price}
+          <span class="text-muted-foreground text-xs font-medium">{labels.from}</span>
+          <span class="text-3xl font-semibold tracking-tight tabular-nums">{plan.price}</span>
+          <span class="text-muted-foreground text-sm">{plan.cycle}</span>
+        {/if}
+      </div>
+      {#if plan.setup}
+        <p class="text-muted-foreground mt-1 text-xs">{labels.setup} {plan.setup}</p>
+      {/if}
+      {#if plan.features.length > 0}
+        <ul class="mt-6 flex flex-col gap-2.5 text-sm">
+          {#each plan.features as f, i (i)}
+            <li class="flex items-start gap-2.5"><Icon name="check" class="text-primary mt-0.5" /><span>{f}</span></li>
+          {/each}
+        </ul>
+      {/if}
+      <div class="mt-auto pt-8">
+        {#if plan.soldOut}
+          <span class={buttonVariants({ variant: "outline" }) + " pointer-events-none w-full opacity-60"} aria-disabled="true">{labels.soldOut}</span>
+        {:else}
+          <a href={plan.href} class={buttonVariants({ variant: plan.highlight ? "default" : "outline" }) + " w-full gap-2"}>{labels.order}<Icon name="arrow-right" /></a>
+        {/if}
+      </div>
+    </article>
+  }
+}
+
+component PlansBlock(block: SiteBlock, labels: SiteLabels) {
+  derived cols = block.plans.length >= 4 ? "lg:grid-cols-4" : block.plans.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+  view {
+    <section id="plans" class={cn("scroll-mt-20", toneClass(block.tone === "primary" ? "muted" : block.tone))}>
+      <div class="mx-auto flex max-w-[var(--container,80rem)] flex-col gap-10 px-4 py-20 sm:px-6 lg:px-8">
+        <SiteHeading title={block.title} body={block.body} />
+        {#if block.plans.length === 0}
+          <p class="bg-card/60 text-muted-foreground rounded-2xl border border-dashed px-6 py-10 text-center text-sm leading-6">{labels.noPlans}</p>
+        {:else}
+          <div class={cn("grid gap-6 sm:grid-cols-2", cols)}>
+            {#each block.plans as p (p.id)}
+              <PlanCard plan={p} labels={labels} />
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </section>
+  }
+}
+
+component DomainsBlock(block: SiteBlock, labels: SiteLabels, searchAction: string) {
+  view {
+    <section class={toneClass(block.tone)}>
+      <div class="mx-auto flex max-w-[var(--container,80rem)] flex-col items-center gap-8 px-4 py-20 text-center sm:px-6 lg:px-8">
+        <SiteHeading title={block.title} body={block.body} center={true} />
+        {#if block.search}
+          <DomainSearchBar labels={labels} target={searchAction} inverted={block.tone === "primary"} />
+        {/if}
+        {#if block.tlds.length > 0}
+          <ul class="grid w-full max-w-4xl grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {#each block.tlds as d (d.tld)}
+              <li class="bg-card text-card-foreground flex flex-col items-center gap-1 rounded-2xl border px-3 py-4">
+                <span class="text-lg font-semibold tracking-tight">.{d.tld}</span>
+                {#if d.price}
+                  <span class="text-muted-foreground text-xs tabular-nums">{d.price} {labels.perYear}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    </section>
+  }
+}
+
+component FeaturesBlock(block: SiteBlock) {
+  derived inv = block.tone === "primary"
+  view {
+    <section class={toneClass(block.tone)}>
+      <div class="mx-auto flex max-w-[var(--container,80rem)] flex-col gap-12 px-4 py-20 sm:px-6 lg:px-8">
+        <SiteHeading title={block.title} body={block.body} />
+        <div class="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          {#each block.items as it, i (i)}
+            <div class="flex flex-col gap-3">
+              <span class={cn("grid size-11 place-items-center rounded-xl", inv ? "bg-primary-foreground/15" : "bg-primary/10 text-primary")}><Icon name={it.icon} class="size-5" /></span>
+              <h3 class="text-base font-semibold">{it.title}</h3>
+              {#if it.body}
+                <p class={cn("text-sm leading-relaxed", inv ? "text-primary-foreground/80" : "text-muted-foreground")}>{it.body}</p>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+    </section>
+  }
+}
+
+component StatsBlock(block: SiteBlock) {
+  derived inv = block.tone === "primary"
+  view {
+    <section class={cn("border-y", toneClass(block.tone))}>
+      <div class="mx-auto flex max-w-[var(--container,80rem)] flex-col gap-10 px-4 py-16 sm:px-6 lg:px-8">
+        <SiteHeading title={block.title} body={block.body} center={true} />
+        <dl class="grid grid-cols-2 gap-8 lg:grid-cols-4">
+          {#each block.items as it, i (i)}
+            <div class="flex flex-col items-center gap-1 text-center">
+              <dt class={cn("order-2 text-sm", inv ? "text-primary-foreground/80" : "text-muted-foreground")}>{it.title}</dt>
+              <dd class="order-1 text-4xl font-semibold tracking-tight tabular-nums">{it.value}</dd>
+            </div>
+          {/each}
+        </dl>
+      </div>
+    </section>
+  }
+}
+
+component FaqBlock(block: SiteBlock) {
+  view {
+    <section class={toneClass(block.tone === "primary" ? "muted" : block.tone)}>
+      <div class="mx-auto grid max-w-[var(--container,80rem)] gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_1.6fr] lg:px-8">
+        <SiteHeading title={block.title} body={block.body} />
+        <div class="divide-y rounded-2xl border bg-card">
+          {#each block.items as it, i (i)}
+            <details class="group px-6 py-4 [&_summary::-webkit-details-marker]:hidden">
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-1 font-medium">
+                {it.title}
+                <Icon name="chevron-down" class="text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <p class="text-muted-foreground pt-3 text-sm leading-relaxed whitespace-pre-line">{it.body}</p>
+            </details>
+          {/each}
+        </div>
+      </div>
+    </section>
+  }
+}
+
+component CtaBlock(block: SiteBlock) {
+  view {
+    <section class="px-4 py-16 sm:px-6 lg:px-8">
+      <div class={cn("mx-auto flex max-w-[var(--container,80rem)] flex-col items-start gap-6 rounded-3xl px-8 py-14 sm:px-14 lg:flex-row lg:items-center lg:justify-between", block.tone === "muted" ? "bg-muted" : "bg-primary text-primary-foreground")}>
+        <div class="flex max-w-2xl flex-col gap-3">
+          <h2 class="text-3xl font-semibold tracking-tight text-balance">{block.title}</h2>
+          {#if block.body}
+            <p class="text-lg opacity-85">{block.body}</p>
+          {/if}
+        </div>
+        <div class="flex flex-wrap gap-3">
+          {#if block.primary}
+            <a href={block.primary.href} class={buttonVariants({ size: "lg", variant: block.tone === "muted" ? "default" : "secondary" }) + " gap-2"}>{block.primary.label}<Icon name="arrow-right" /></a>
+          {/if}
+          {#if block.secondary}
+            <a href={block.secondary.href} class={buttonVariants({ size: "lg", variant: "outline" }) + " text-foreground"}>{block.secondary.label}</a>
+          {/if}
+        </div>
+      </div>
+    </section>
+  }
+}
+
+component TextBlock(block: SiteBlock) {
+  view {
+    <section class={toneClass(block.tone)}>
+      <div class="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-16 sm:px-6">
+        {#if block.title}
+          <h2 class="text-3xl font-semibold tracking-tight">{block.title}</h2>
+        {/if}
+        {#if block.rich}
+          <div class="md-body">{block.rich}</div>
+        {/if}
+      </div>
+    </section>
+  }
+}
+
+component Stars(count: number) {
+  view {
+    <span class="text-primary flex items-center gap-0.5" aria-hidden="true">
+      {#each [1, 2, 3, 4, 5] as n (n)}
+        <Icon name="star" class={n <= Math.round(count) ? "fill-current" : "opacity-25"} />
+      {/each}
+    </span>
+  }
+}
+
+component ReviewsBlock(block: SiteBlock, labels: SiteLabels) {
+  derived r = block.reviews
+  view {
+    {#if r}
+      <section class={toneClass(block.tone === "primary" ? "muted" : block.tone)}>
+        <div class="mx-auto flex max-w-[var(--container,80rem)] flex-col gap-10 px-4 py-20 sm:px-6 lg:px-8">
+          <div class="flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
+            <SiteHeading title={block.title} body={block.body} />
+            <a href={r.url} rel="noopener" target="_blank" class="bg-card flex shrink-0 items-center gap-4 rounded-2xl border px-5 py-4 transition-colors hover:border-primary/30">
+              <span class="text-3xl font-semibold tabular-nums">{r.score.toFixed(1)}</span>
+              <span class="flex flex-col gap-1">
+                <Stars count={r.stars} />
+                <span class="text-muted-foreground text-xs">{labels.reviewsSummary.replace("{total}", r.total.toLocaleString())}</span>
+              </span>
+            </a>
+          </div>
+          <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {#each r.reviews as x, i (i)}
+              <li class="bg-card flex flex-col gap-3 rounded-2xl border p-6">
+                <Stars count={x.stars} />
+                {#if x.title}
+                  <p class="font-medium">{x.title}</p>
+                {/if}
+                <p class="text-muted-foreground text-sm leading-relaxed">{x.text}</p>
+                <p class="mt-auto pt-2 text-xs font-medium">{x.author}</p>
+              </li>
+            {/each}
+          </ul>
+          <a href={r.url} rel="noopener" target="_blank" class="text-muted-foreground hover:text-foreground w-fit text-sm underline-offset-4 hover:underline">{labels.reviewsLink}</a>
+        </div>
+      </section>
+    {/if}
+  }
+}
+
+component SiteBlocks(blocks: SiteBlock[], labels: SiteLabels, searchAction: string) {
+  view {
+    {#each blocks as b (b.id)}
+      {#if b.kind === "hero"}
+        <HeroBlock block={b} labels={labels} searchAction={searchAction} />
+      {:else if b.kind === "products"}
+        <PlansBlock block={b} labels={labels} />
+      {:else if b.kind === "domains"}
+        <DomainsBlock block={b} labels={labels} searchAction={searchAction} />
+      {:else if b.kind === "features"}
+        <FeaturesBlock block={b} />
+      {:else if b.kind === "stats"}
+        <StatsBlock block={b} />
+      {:else if b.kind === "faq"}
+        <FaqBlock block={b} />
+      {:else if b.kind === "reviews"}
+        <ReviewsBlock block={b} labels={labels} />
+      {:else if b.kind === "cta"}
+        <CtaBlock block={b} />
+      {:else}
+        <TextBlock block={b} />
+      {/if}
+    {/each}
+  }
+}

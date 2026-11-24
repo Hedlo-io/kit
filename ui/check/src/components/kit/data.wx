@@ -1,0 +1,401 @@
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { inputClass } from "../ui/input.wx";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "../ui/table.wx";
+import { LineChart, type ChartRow, type ChartSeries } from "../ui/chart.wx";
+import { Icon } from "./icons.wx";
+import { StatusPill, type Tone } from "./status.wx";
+
+export function sparkPath(points: readonly number[], w = 120, h = 32, area = false): string {
+  const pts = points.filter((n) => Number.isFinite(n));
+  if (pts.length === 0) return "";
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const span = max - min || 1;
+  const step = pts.length > 1 ? w / (pts.length - 1) : 0;
+  const coords = pts.map((v, i) => `${(i * step).toFixed(1)},${(h - 2 - ((v - min) / span) * (h - 4)).toFixed(1)}`);
+  const line = `M${coords.join(" L")}`;
+  return area ? `${line} L${((pts.length - 1) * step).toFixed(1)},${h} L0,${h} Z` : line;
+}
+
+export function deltaOf(current: number, previous: number | null | undefined): number | null {
+  if (previous === null || previous === undefined || !Number.isFinite(previous) || previous === 0) return null;
+  return (current - previous) / Math.abs(previous);
+}
+
+component Sparkline(points: number[], label: string, tone?: "primary" | "success" | "warning" | "danger", ...attrs: Attrs) {
+  derived stroke = tone === "success" ? "stroke-chart-2" : tone === "warning" ? "stroke-chart-4" : tone === "danger" ? "stroke-destructive" : "stroke-primary"
+  derived fill = tone === "success" ? "fill-chart-2/15" : tone === "warning" ? "fill-chart-4/15" : tone === "danger" ? "fill-destructive/15" : "fill-primary/15"
+  view {
+    <svg viewBox="0 0 120 32" preserveAspectRatio="none" role="img" aria-label={label} data-slot="sparkline" class={cn("h-8 w-full overflow-visible", attrs.class)} {...attrs}>
+      <path d={sparkPath(points, 120, 32, true)} class={cn("stroke-none", fill)}></path>
+      <path d={sparkPath(points)} fill="none" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" class={stroke}></path>
+    </svg>
+  }
+}
+
+component StatCard(label: string, value: () => number, format?: (n: number) => string, previous?: number | null, trend?: () => number[], hint?: string, icon?: string, href?: string, invert?: boolean, ...attrs: Attrs) {
+  derived v = value()
+  derived d = deltaOf(v, previous)
+  derived good = d === null ? null : invert ? d < 0 : d > 0
+  view {
+    <div data-slot="stat-card" class={cn("bg-card text-card-foreground relative flex flex-col gap-2 rounded-xl border p-5 shadow-sm", href ? "hover:bg-accent/40 transition-colors" : "", attrs.class)} {...attrs}>
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-muted-foreground text-sm">{label}</span>
+        {#if icon}
+          <Icon name={icon} class="text-muted-foreground" />
+        {/if}
+      </div>
+      <div class="flex items-baseline gap-2">
+        <span class="text-2xl font-semibold tabular-nums" aria-live="polite">{format ? format(v) : v.toLocaleString()}</span>
+        {#if d !== null}
+          <span class={cn("text-xs font-medium tabular-nums", good ? "text-chart-2" : "text-destructive")}>{d > 0 ? "+" : ""}{(d * 100).toFixed(1)}%</span>
+        {/if}
+      </div>
+      {#if trend}
+        <Sparkline points={trend()} label={label} tone={good === false ? "danger" : "primary"} />
+      {/if}
+      {#if hint}
+        <span class="text-muted-foreground text-xs">{hint}</span>
+      {/if}
+      {#if href}
+        <a href={href} class="absolute inset-0 rounded-xl" aria-label={label}></a>
+      {/if}
+    </div>
+  }
+}
+
+export interface RangeChoice {
+  id: string;
+  label: string;
+  href: string;
+}
+
+component MetricChart(title: string, data: () => ChartRow[], x: string, series: ChartSeries[], ranges?: RangeChoice[], range?: string, ...attrs: Attrs) {
+  view {
+    <section data-slot="metric-chart" aria-label={title} class={cn("bg-card text-card-foreground flex flex-col gap-4 rounded-xl border p-5 shadow-sm", attrs.class)} {...attrs}>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-sm font-medium">{title}</h3>
+        {#if ranges && ranges.length}
+          <nav class="bg-muted inline-flex rounded-md p-0.5">
+            {#each ranges as r (r.id)}
+              <a href={r.href} aria-current={r.id === range ? "true" : undefined} class={cn("rounded px-2 py-1 text-xs font-medium transition-colors", r.id === range ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{r.label}</a>
+            {/each}
+          </nav>
+        {/if}
+      </div>
+      <LineChart label={title} data={data()} x={x} series={series} />
+    </section>
+  }
+}
+
+export type CellKind = "text" | "mono" | "number" | "status" | "time" | "muted";
+
+export interface EntityColumn<T> {
+  key: string;
+  header: string;
+  cell: (row: T) => string | number | null | undefined;
+  kind?: CellKind;
+  tone?: (row: T) => Tone | undefined;
+  state?: (row: T) => string;
+  sortable?: boolean;
+  hideBelow?: "sm" | "md" | "lg";
+}
+
+export interface SortState {
+  sort: string;
+  dir: "asc" | "desc";
+}
+
+export interface PageState {
+  page: number;
+  pages: number;
+  total: number;
+}
+
+export interface TableLabels {
+  empty: string;
+  select: string;
+  selectAll: string;
+  previous: string;
+  next: string;
+  columns: string;
+  apply: string;
+  export: string;
+  views: string;
+  selected: string;
+  summary: (p: PageState) => string;
+}
+
+export const DEFAULT_TABLE_LABELS: TableLabels = {
+  empty: "Nothing here yet.",
+  select: "Select row",
+  selectAll: "Select all rows",
+  previous: "Previous",
+  next: "Next",
+  columns: "Columns",
+  apply: "Apply",
+  export: "Export",
+  views: "Views",
+  selected: "With selected",
+  summary: (p) => `Page ${p.page} of ${p.pages} · ${p.total} total`,
+};
+
+export function linkWith(url: URL, change: Record<string, string | number | null>): string {
+  const next = new URLSearchParams(url.searchParams);
+  for (const [k, v] of Object.entries(change)) {
+    if (v === null || v === "") next.delete(k);
+    else next.set(k, String(v));
+  }
+  const s = next.toString();
+  return s ? `${url.pathname}?${s}` : url.pathname;
+}
+
+export interface SavedView {
+  id: string;
+  label: string;
+  href: string;
+  active?: boolean;
+}
+
+export function visibleColumns<T>(columns: readonly EntityColumn<T>[], url: URL, param = "cols"): EntityColumn<T>[] {
+  const raw = url.searchParams.getAll(param).flatMap((v) => v.split(",")).filter(Boolean);
+  if (raw.length === 0) return [...columns];
+  const want = new Set(raw);
+  const out = columns.filter((c, i) => i === 0 || want.has(c.key));
+  return out.length ? out : [...columns];
+}
+
+export function hiddenParams(url: URL, skip: readonly string[]): [string, string][] {
+  return [...url.searchParams.entries()].filter(([k]) => !skip.includes(k));
+}
+
+export function hideClass(h?: "sm" | "md" | "lg"): string {
+  return h === "sm" ? "hidden sm:table-cell" : h === "md" ? "hidden md:table-cell" : h === "lg" ? "hidden lg:table-cell" : "";
+}
+
+export function cellClass(kind?: CellKind): string {
+  switch (kind) {
+    case "mono":
+      return "font-mono text-xs";
+    case "number":
+      return "text-end tabular-nums";
+    case "time":
+    case "muted":
+      return "text-muted-foreground text-xs whitespace-nowrap";
+    default:
+      return "";
+  }
+}
+
+component EntityTable<T>(rows: () => T[], key: (row: T) => string, columns: EntityColumn<T>[], url: URL, sort?: SortState, paging?: PageState, rowHref?: (row: T) => string, selectName?: string, actions?: (row: T) => { label: string; href: string }[], caption?: string, views?: SavedView[], chooser?: boolean, exportHref?: string, formId?: string, labels?: TableLabels, children?: Html, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_TABLE_LABELS
+  derived list = rows()
+  derived cols = chooser ? visibleColumns(columns, url) : columns
+  view {
+    <div data-slot="entity-table" class={cn("flex w-full flex-col gap-3", attrs.class)} {...attrs}>
+      {#if (views && views.length) || chooser || exportHref || (children && selectName)}
+        <div class="flex flex-wrap items-center gap-2">
+          {#if views && views.length}
+            <nav aria-label={l.views} class="bg-muted inline-flex flex-wrap rounded-md p-0.5">
+              {#each views as v (v.id)}
+                <a href={v.href} aria-current={v.active ? "true" : undefined} class={cn("rounded px-2.5 py-1 text-xs font-medium", v.active ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>{v.label}</a>
+              {/each}
+            </nav>
+          {/if}
+          {#if children && selectName}
+            <div role="group" aria-label={l.selected} class="flex items-center gap-1">
+              <span class="text-muted-foreground text-xs">{l.selected}:</span>
+              {children}
+            </div>
+          {/if}
+          <div class="ms-auto flex items-center gap-2">
+            {#if chooser}
+              <details class="relative">
+                <summary class={cn(buttonVariants({ variant: "outline", size: "sm" }), "list-none")}>{l.columns}</summary>
+                <form method="get" class="bg-popover text-popover-foreground absolute end-0 z-30 mt-1 flex w-56 flex-col gap-1.5 rounded-md border p-3 shadow-md">
+                  {#each hiddenParams(url, ["cols", "page"]) as kv (kv[0])}
+                    <input type="hidden" name={kv[0]} value={kv[1]} />
+                  {/each}
+                  {#each columns as c, i (c.key)}
+                    <label class="flex items-center gap-2 text-sm">
+                      {#if i === 0}
+                        <input type="hidden" name="cols" value={c.key} />
+                      {/if}
+                      <input type="checkbox" name={i === 0 ? undefined : "cols"} value={c.key} checked={cols.some((x) => x.key === c.key)} disabled={i === 0} class="accent-primary size-4" />
+                      {c.header}
+                    </label>
+                  {/each}
+                  <button type="submit" class={cn(buttonVariants({ size: "sm" }), "mt-1")}>{l.apply}</button>
+                </form>
+              </details>
+            {/if}
+            {#if exportHref}
+              <a href={exportHref} download="" class={buttonVariants({ variant: "outline", size: "sm" })}><Icon name="download" />{l.export}</a>
+            {/if}
+          </div>
+        </div>
+      {/if}
+      <div class="overflow-hidden rounded-xl border">
+        <Table>
+          {#if caption}
+            <TableCaption class="sr-only">{caption}</TableCaption>
+          {/if}
+          <TableHeader class="bg-muted/40">
+            <TableRow>
+              {#if selectName}
+                <TableHead class="w-10">
+                  <input type="checkbox" data-select-all={selectName} aria-label={l.selectAll} class="accent-primary size-4" />
+                </TableHead>
+              {/if}
+              {#each cols as c (c.key)}
+                <TableHead class={cn(hideClass(c.hideBelow), c.kind === "number" ? "text-end" : "")} aria-sort={sort && c.sortable ? (sort.sort !== c.key ? "none" : sort.dir === "asc" ? "ascending" : "descending") : undefined}>
+                  {#if c.sortable && sort}
+                    <a href={linkWith(url, { sort: c.key, dir: sort.sort === c.key && sort.dir === "asc" ? "desc" : "asc", page: null })} class="hover:text-foreground inline-flex items-center gap-1">
+                      {c.header}
+                      {#if sort.sort === c.key}
+                        <Icon name="chevron-down" class={cn("size-3", sort.dir === "asc" ? "rotate-180" : "")} />
+                      {/if}
+                    </a>
+                  {:else}
+                    {c.header}
+                  {/if}
+                </TableHead>
+              {/each}
+              {#if actions}
+                <TableHead class="w-0"><span class="sr-only">{caption ?? ""}</span></TableHead>
+              {/if}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {#each list as row (key(row))}
+              <TableRow data-key={key(row)} class={rowHref ? "relative cursor-pointer" : ""}>
+                {#if selectName}
+                  <TableCell class="relative z-10">
+                    <input type="checkbox" name={selectName} value={key(row)} form={formId} aria-label={l.select} class="accent-primary size-4" />
+                  </TableCell>
+                {/if}
+                {#each cols as c, i (c.key)}
+                  <TableCell class={cn(hideClass(c.hideBelow), cellClass(c.kind))}>
+                    {#if c.kind === "status"}
+                      <StatusPill state={c.state ? c.state(row) : String(c.cell(row) ?? "")} label={String(c.cell(row) ?? "")} tone={c.tone ? c.tone(row) : undefined} />
+                    {:else if i === 0 && rowHref}
+                      <a href={rowHref(row)} class="font-medium after:absolute after:inset-0">{String(c.cell(row) ?? "")}</a>
+                    {:else}
+                      {String(c.cell(row) ?? "")}
+                    {/if}
+                  </TableCell>
+                {/each}
+                {#if actions}
+                  <TableCell class="relative z-10 text-end whitespace-nowrap">
+                    {#each actions(row) as a (a.href)}
+                      <a href={a.href} class={buttonVariants({ variant: "ghost", size: "sm" })}>{a.label}</a>
+                    {/each}
+                  </TableCell>
+                {/if}
+              </TableRow>
+            {/each}
+            {#if list.length === 0}
+              <TableRow>
+                <TableCell colspan={String(cols.length + (selectName ? 1 : 0) + (actions ? 1 : 0))} class="text-muted-foreground h-24 text-center">{l.empty}</TableCell>
+              </TableRow>
+            {/if}
+          </TableBody>
+        </Table>
+      </div>
+      {#if paging && paging.pages > 1}
+        <nav class="flex items-center justify-between gap-2 text-sm" aria-label={l.summary(paging)}>
+          <span class="text-muted-foreground tabular-nums">{l.summary(paging)}</span>
+          <div class="flex gap-2">
+            {#if paging.page > 1}
+              <a href={linkWith(url, { page: paging.page - 1 })} rel="prev" class={buttonVariants({ variant: "outline", size: "sm" })}>{l.previous}</a>
+            {/if}
+            {#if paging.page < paging.pages}
+              <a href={linkWith(url, { page: paging.page + 1 })} rel="next" class={buttonVariants({ variant: "outline", size: "sm" })}>{l.next}</a>
+            {/if}
+          </div>
+        </nav>
+      {/if}
+    </div>
+  }
+}
+
+export interface FilterOption {
+  value: string;
+  label: string;
+}
+
+export interface FilterDef {
+  name: string;
+  label: string;
+  options: FilterOption[];
+}
+
+export interface FilterLabels {
+  search: string;
+  apply: string;
+  clear: string;
+  any: string;
+}
+
+export const DEFAULT_FILTER_LABELS: FilterLabels = { search: "Search", apply: "Apply", clear: "Clear", any: "Any" };
+
+export function activeFilters(url: URL, filters: readonly FilterDef[]): { name: string; label: string; value: string; href: string }[] {
+  const out: { name: string; label: string; value: string; href: string }[] = [];
+  for (const f of filters) {
+    const v = url.searchParams.get(f.name);
+    if (!v) continue;
+    const opt = f.options.find((o) => o.value === v);
+    out.push({ name: f.name, label: f.label, value: opt?.label ?? v, href: linkWith(url, { [f.name]: null, page: null }) });
+  }
+  return out;
+}
+
+component FilterBar(url: URL, filters?: FilterDef[], labels?: FilterLabels, extra?: string[], ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_FILTER_LABELS
+  derived defs = filters ?? []
+  derived chips = activeFilters(url, defs)
+  derived q = url.searchParams.get("q") ?? ""
+  view {
+    <div data-slot="filter-bar" class={cn("flex flex-col gap-2", attrs.class)} {...attrs}>
+      <form method="get" role="search" class="flex flex-wrap items-center gap-2">
+        <div class="relative min-w-48 flex-1 sm:max-w-sm">
+          <Icon name="search" class="text-muted-foreground pointer-events-none absolute top-1/2 start-2.5 -translate-y-1/2" />
+          <input type="search" name="q" value={q} placeholder={l.search} aria-label={l.search} class={cn(inputClass, "ps-8")} />
+        </div>
+        {#each defs as f (f.name)}
+          <select name={f.name} aria-label={f.label} class={cn(inputClass, "w-auto")}>
+            <option value="">{f.label}: {l.any}</option>
+            {#each f.options as o (o.value)}
+              <option value={o.value} selected={url.searchParams.get(f.name) === o.value}>{o.label}</option>
+            {/each}
+          </select>
+        {/each}
+        {#each extra ?? [] as k (k)}
+          {#if url.searchParams.get(k)}
+            <input type="hidden" name={k} value={url.searchParams.get(k) ?? ""} />
+          {/if}
+        {/each}
+        <button type="submit" class={buttonVariants({ variant: "secondary", size: "sm" })}>{l.apply}</button>
+      </form>
+      {#if chips.length || q}
+        <div class="flex flex-wrap items-center gap-1.5">
+          {#each chips as c (c.name)}
+            <a href={c.href} class="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs">
+              <span class="text-muted-foreground">{c.label}:</span>
+              {c.value}
+              <Icon name="x" class="size-3" />
+            </a>
+          {/each}
+          <a href={url.pathname} class="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">{l.clear}</a>
+        </div>
+      {/if}
+    </div>
+  }
+}
+
+component PlanBadge(name: string, tier?: "free" | "standard" | "premium" | "custom", ...attrs: Attrs) {
+  view {
+    <span data-slot="plan-badge" data-tier={tier ?? "standard"} class={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold", tier === "premium" ? "from-primary/20 to-chart-4/20 border-primary/40 text-primary bg-gradient-to-r" : tier === "free" ? "bg-muted text-muted-foreground" : tier === "custom" ? "border-chart-4/40 bg-chart-4/10 text-chart-4" : "bg-primary/10 text-primary border-primary/30", attrs.class)} {...attrs}>{name}</span>
+  }
+}

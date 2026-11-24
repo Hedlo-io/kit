@@ -1,0 +1,217 @@
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { inputClass } from "../ui/input.wx";
+import { Icon } from "./icons.wx";
+import { relativeTime } from "./overlays.wx";
+
+export interface ActivityEntry {
+  id: string;
+  seq: number;
+  actor: string | null;
+  impersonator: string | null;
+  action: string;
+  target: string | null;
+  summary: string;
+  meta: Record<string, string | number | boolean | null>;
+  ip: string | null;
+  at: number;
+}
+
+export const ACTION_ICONS: Record<string, string> = {
+  server: "server",
+  user: "user",
+  member: "users",
+  auth: "key",
+  backup: "archive",
+  database: "database",
+  file: "file",
+  schedule: "clock",
+  network: "network",
+  plugin: "puzzle",
+  branding: "palette",
+  billing: "credit-card",
+  invoice: "receipt",
+  ticket: "ticket",
+  gdpr: "shield",
+};
+
+export function actionIcon(action: string): string {
+  return ACTION_ICONS[action.split(".")[0] ?? ""] ?? "activity";
+}
+
+export function dayKey(at: number, locale = "en"): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(at);
+}
+
+export function byDay(rows: readonly ActivityEntry[], locale = "en"): { day: string; rows: ActivityEntry[] }[] {
+  const out: { day: string; rows: ActivityEntry[] }[] = [];
+  for (const r of rows) {
+    const d = dayKey(r.at, locale);
+    const last = out[out.length - 1];
+    if (last && last.day === d) last.rows.push(r);
+    else out.push({ day: d, rows: [r] });
+  }
+  return out;
+}
+
+export function metaPairs(meta: Record<string, string | number | boolean | null>): [string, string][] {
+  return Object.entries(meta).map(([k, v]) => [k, v === null ? "–" : String(v)]);
+}
+
+component ActivityStream(rows: () => ActivityEntry[], name?: (id: string | null) => string, now?: () => number, locale?: string, empty?: string, moreHref?: string, moreLabel?: string, ...attrs: Attrs) {
+  derived list = rows()
+  derived t = now ? now() : Date.now()
+  view {
+    <div data-slot="activity-stream" class={cn("flex flex-col", attrs.class)} {...attrs}>
+      {#if list.length === 0}
+        <p class="text-muted-foreground py-6 text-center text-sm">{empty ?? "No activity yet."}</p>
+      {:else}
+        <ol class="relative flex flex-col gap-4 before:bg-border before:absolute before:top-2 before:bottom-2 before:start-3.5 before:w-px" aria-live="polite">
+          {#each list as r (r.id)}
+            <li class="relative flex gap-3">
+              <span class="bg-background text-muted-foreground relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full border"><Icon name={actionIcon(r.action)} class="size-3.5" /></span>
+              <div class="flex min-w-0 flex-col gap-0.5 pt-0.5">
+                <p class="text-sm">
+                  <span class="font-medium">{name ? name(r.actor) : (r.actor ?? "system")}</span>
+                  <span class="text-muted-foreground"> · {r.summary || r.action}</span>
+                </p>
+                <time datetime={new Date(r.at).toISOString()} class="text-muted-foreground text-xs">{relativeTime(r.at, t, locale ?? "en")}</time>
+              </div>
+            </li>
+          {/each}
+        </ol>
+        {#if moreHref}
+          <a href={moreHref} class={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mt-2 self-start")}>{moreLabel ?? "View all"}</a>
+        {/if}
+      {/if}
+    </div>
+  }
+}
+
+export interface AuditLabels {
+  title: string;
+  actor: string;
+  action: string;
+  target: string;
+  from: string;
+  to: string;
+  apply: string;
+  export: string;
+  verified: string;
+  broken: string;
+  empty: string;
+  older: string;
+  details: string;
+  viaImpersonation: (who: string) => string;
+}
+
+export const DEFAULT_AUDIT_LABELS: AuditLabels = {
+  title: "Audit log",
+  actor: "Actor",
+  action: "Action",
+  target: "Target",
+  from: "From",
+  to: "To",
+  apply: "Filter",
+  export: "Export",
+  verified: "Chain verified",
+  broken: "Chain broken",
+  empty: "No entries match.",
+  older: "Older entries",
+  details: "Details",
+  viaImpersonation: (who) => `as ${who}`,
+};
+
+component AuditLogView(rows: () => ActivityEntry[], url: URL, verified?: () => boolean | null, exportHref?: string, olderHref?: string | null, name?: (id: string | null) => string, locale?: string, labels?: AuditLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_AUDIT_LABELS
+  derived groups = byDay(rows(), locale ?? "en")
+  derived ok = verified ? verified() : null
+  derived p = url.searchParams
+  view {
+    <section aria-label={l.title} data-slot="audit-log" class={cn("flex flex-col gap-4", attrs.class)} {...attrs}>
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <form method="get" role="search" class="flex flex-wrap items-end gap-2">
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-muted-foreground">{l.actor}</span>
+            <input name="actor" value={p.get("actor") ?? ""} class={cn(inputClass, "h-8 w-40")} />
+          </label>
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-muted-foreground">{l.action}</span>
+            <input name="action" value={p.get("action") ?? ""} placeholder="server." class={cn(inputClass, "h-8 w-40 font-mono")} />
+          </label>
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-muted-foreground">{l.target}</span>
+            <input name="target" value={p.get("target") ?? ""} class={cn(inputClass, "h-8 w-40")} />
+          </label>
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-muted-foreground">{l.from}</span>
+            <input type="date" name="since" value={p.get("since") ?? ""} class={cn(inputClass, "h-8")} />
+          </label>
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-muted-foreground">{l.to}</span>
+            <input type="date" name="until" value={p.get("until") ?? ""} class={cn(inputClass, "h-8")} />
+          </label>
+          <button type="submit" class={buttonVariants({ variant: "secondary", size: "sm" })}>{l.apply}</button>
+        </form>
+        <div class="flex items-center gap-2">
+          {#if ok !== null}
+            <span role="status" class={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", ok ? "bg-chart-2/15 text-chart-2" : "bg-destructive/15 text-destructive")}>
+              <Icon name={ok ? "shield" : "alert"} class="size-3.5" />
+              {ok ? l.verified : l.broken}
+            </span>
+          {/if}
+          {#if exportHref}
+            <a href={exportHref} download="" class={buttonVariants({ variant: "outline", size: "sm" })}><Icon name="download" />{l.export}</a>
+          {/if}
+        </div>
+      </div>
+      {#if groups.length === 0}
+        <p class="text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">{l.empty}</p>
+      {:else}
+        {#each groups as g (g.day)}
+          <div class="flex flex-col gap-1">
+            <h3 class="text-muted-foreground bg-background/90 sticky top-14 z-10 py-1 text-xs font-medium backdrop-blur">{g.day}</h3>
+            <ul class="divide-y rounded-xl border">
+              {#each g.rows as r (r.id)}
+                <li>
+                  <details class="group">
+                    <summary class="hover:bg-muted/40 flex cursor-pointer list-none items-center gap-3 px-4 py-2.5 text-sm">
+                      <Icon name={actionIcon(r.action)} class="text-muted-foreground" />
+                      <time datetime={new Date(r.at).toISOString()} class="text-muted-foreground w-16 shrink-0 text-xs tabular-nums">{new Intl.DateTimeFormat(locale ?? "en", { timeStyle: "medium" }).format(r.at)}</time>
+                      <span class="w-36 shrink-0 truncate font-medium">{name ? name(r.actor) : (r.actor ?? "system")}</span>
+                      <code class="bg-muted hidden shrink-0 rounded px-1.5 py-0.5 font-mono text-xs md:inline">{r.action}</code>
+                      <span class="text-muted-foreground min-w-0 flex-1 truncate">{r.summary}</span>
+                      {#if r.impersonator}
+                        <span class="bg-chart-4/15 text-chart-4 shrink-0 rounded px-1.5 py-0.5 text-xs">{l.viaImpersonation(name ? name(r.impersonator) : r.impersonator)}</span>
+                      {/if}
+                      <Icon name="chevron-down" class="text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <dl class="bg-muted/30 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 px-4 py-3 font-mono text-xs">
+                      <dt class="text-muted-foreground">seq</dt>
+                      <dd>{String(r.seq)}</dd>
+                      {#if r.target}
+                        <dt class="text-muted-foreground">target</dt>
+                        <dd class="break-all">{r.target}</dd>
+                      {/if}
+                      {#if r.ip}
+                        <dt class="text-muted-foreground">ip</dt>
+                        <dd>{r.ip}</dd>
+                      {/if}
+                      {#each metaPairs(r.meta) as kv (kv[0])}
+                        <dt class="text-muted-foreground">{kv[0]}</dt>
+                        <dd class="break-all">{kv[1]}</dd>
+                      {/each}
+                    </dl>
+                  </details>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/each}
+        {#if olderHref}
+          <a href={olderHref} class={cn(buttonVariants({ variant: "outline", size: "sm" }), "self-center")}>{l.older}</a>
+        {/if}
+      {/if}
+    </section>
+  }
+}

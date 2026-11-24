@@ -1,0 +1,409 @@
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "../ui/command.wx";
+import { Stepper, type StepperStep } from "../ui/stepper.wx";
+import { Icon } from "./icons.wx";
+client import { uploadFile } from "@weft-framework/runtime"
+
+export interface PaletteItem {
+  id: string;
+  label: string;
+  href: string;
+  icon?: string;
+  hint?: string;
+  shortcut?: string;
+}
+
+export interface PaletteGroup {
+  id: string;
+  heading: string;
+  items: PaletteItem[];
+}
+
+export interface PaletteLabels {
+  title: string;
+  placeholder: string;
+  empty: string;
+}
+
+export const DEFAULT_PALETTE_LABELS: PaletteLabels = { title: "Command palette", placeholder: "Type a command or search…", empty: "No results." };
+
+component CommandPalette(id: string, groups: () => PaletteGroup[], labels?: PaletteLabels) {
+  derived l = labels ?? DEFAULT_PALETTE_LABELS
+  client function hotkey(el: HTMLElement, target: string) {
+    const open = () => {
+      const d = document.getElementById(target)
+      if (d instanceof HTMLDialogElement && !d.open) {
+        d.showModal()
+        d.querySelector<HTMLInputElement>("input")?.focus()
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        open()
+      }
+    }
+    const onClick = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest("[data-command-open]")) open()
+    }
+    document.addEventListener("keydown", onKey)
+    document.addEventListener("click", onClick)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.removeEventListener("click", onClick)
+    }
+  }
+  view {
+    <span hidden use:hotkey={id}></span>
+    <CommandDialog id={id} title={l.title}>
+      <CommandInput label={l.placeholder} placeholder={l.placeholder} />
+      <CommandList>
+        <CommandEmpty>{l.empty}</CommandEmpty>
+        {#each groups() as g (g.id)}
+          <CommandGroup heading={g.heading}>
+            {#each g.items as it (it.id)}
+              <CommandItem value={`${g.heading} ${it.label} ${it.hint ?? ""}`} href={it.href}>
+                <Icon name={it.icon ?? "chevron-right"} />
+                <span class="truncate">{it.label}</span>
+                {#if it.hint}
+                  <span class="text-muted-foreground truncate text-xs">{it.hint}</span>
+                {/if}
+                {#if it.shortcut}
+                  <CommandShortcut>{it.shortcut}</CommandShortcut>
+                {/if}
+              </CommandItem>
+            {/each}
+          </CommandGroup>
+        {/each}
+      </CommandList>
+    </CommandDialog>
+  }
+}
+
+export interface NoticeItem {
+  id: string;
+  title: string;
+  body?: string;
+  href?: string;
+  at: number;
+  read: boolean;
+  tone?: "info" | "success" | "warning" | "danger";
+}
+
+export interface NoticeLabels {
+  title: string;
+  empty: string;
+  markAll: string;
+  markRead: string;
+  settings: string;
+}
+
+export const DEFAULT_NOTICE_LABELS: NoticeLabels = { title: "Notifications", empty: "You're all caught up.", markAll: "Mark all as read", markRead: "Mark as read", settings: "Notification settings" };
+
+export function relativeTime(at: number, now: number, locale = "en"): string {
+  const f = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const s = Math.round((at - now) / 1000);
+  const a = Math.abs(s);
+  if (a < 60) return f.format(s, "second");
+  if (a < 3600) return f.format(Math.round(s / 60), "minute");
+  if (a < 86400) return f.format(Math.round(s / 3600), "hour");
+  if (a < 2592000) return f.format(Math.round(s / 86400), "day");
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(at);
+}
+
+export const NOTICE_ICON: Record<string, string> = { info: "info", success: "check", warning: "alert", danger: "alert" };
+
+component NotificationCenter(items: () => NoticeItem[], onRead: (id: string) => unknown, onReadAll: () => unknown, settingsHref?: string, now?: () => number, locale?: string, labels?: NoticeLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_NOTICE_LABELS
+  derived list = items()
+  derived unread = list.filter((n) => !n.read).length
+  derived t = now ? now() : Date.now()
+  function read(id: string) {
+    return onRead(id)
+  }
+  function readAll() {
+    return onReadAll()
+  }
+  view {
+    <section aria-label={l.title} data-slot="notification-center" class={cn("bg-card flex flex-col overflow-hidden rounded-xl border", attrs.class)} {...attrs}>
+      <header class="flex items-center justify-between gap-2 border-b px-4 py-3">
+        <h2 class="text-sm font-semibold">
+          {l.title}
+          {#if unread > 0}
+            <span class="bg-primary text-primary-foreground ms-2 rounded-full px-1.5 py-0.5 text-xs tabular-nums">{String(unread)}</span>
+          {/if}
+        </h2>
+        <div class="flex items-center gap-1">
+          {#if unread > 0}
+            <button type="button" class={buttonVariants({ variant: "ghost", size: "sm" })} @click={readAll} :busy>{l.markAll}</button>
+          {/if}
+          {#if settingsHref}
+            <a href={settingsHref} class={buttonVariants({ variant: "ghost", size: "icon" })} aria-label={l.settings}><Icon name="settings" /></a>
+          {/if}
+        </div>
+      </header>
+      {#if list.length === 0}
+        <p class="text-muted-foreground p-8 text-center text-sm">{l.empty}</p>
+      {:else}
+        <ul class="max-h-[28rem] divide-y overflow-y-auto" aria-live="polite">
+          {#each list as n (n.id)}
+            <li data-read={n.read ? "true" : "false"} class="group data-[read=false]:bg-primary/5 relative flex gap-3 px-4 py-3">
+              <span class={cn("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full", n.tone === "danger" ? "bg-destructive/10 text-destructive" : n.tone === "warning" ? "bg-chart-4/10 text-chart-4" : n.tone === "success" ? "bg-chart-2/10 text-chart-2" : "bg-primary/10 text-primary")}>
+                <Icon name={NOTICE_ICON[n.tone ?? "info"] ?? "info"} />
+              </span>
+              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                {#if n.href}
+                  <a href={n.href} class="truncate text-sm font-medium after:absolute after:inset-0">{n.title}</a>
+                {:else}
+                  <span class="truncate text-sm font-medium">{n.title}</span>
+                {/if}
+                {#if n.body}
+                  <p class="text-muted-foreground line-clamp-2 text-xs">{n.body}</p>
+                {/if}
+                <time datetime={new Date(n.at).toISOString()} class="text-muted-foreground text-xs">{relativeTime(n.at, t, locale ?? "en")}</time>
+              </div>
+              {#if !n.read}
+                <button type="button" class={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative z-10 size-7")} aria-label={l.markRead} @click={read(n.id)}>
+                  <span class="bg-primary size-2 rounded-full" aria-hidden="true"></span>
+                </button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+  }
+}
+
+export interface WizardLabels {
+  progress: string;
+  back: string;
+  next: string;
+  finish: string;
+}
+
+export const DEFAULT_WIZARD_LABELS: WizardLabels = { progress: "Progress", back: "Back", next: "Continue", finish: "Finish" };
+
+component Wizard(steps: StepperStep[], title: string, description?: string, backHref?: string, last?: boolean, labels?: WizardLabels, children: Html, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_WIZARD_LABELS
+  view {
+    <div data-slot="wizard" class={cn("mx-auto flex w-full max-w-3xl flex-col gap-6", attrs.class)} {...attrs}>
+      <Stepper steps={steps} label={l.progress} />
+      <div class="bg-card flex flex-col gap-6 rounded-xl border p-6 shadow-sm">
+        <div class="flex flex-col gap-1">
+          <h2 class="text-lg font-semibold">{title}</h2>
+          {#if description}
+            <p class="text-muted-foreground text-sm">{description}</p>
+          {/if}
+        </div>
+        <div class="flex flex-col gap-4">{children}</div>
+        <div class="flex items-center justify-between gap-2 border-t pt-4">
+          {#if backHref}
+            <a href={backHref} class={buttonVariants({ variant: "ghost" })}>{l.back}</a>
+          {:else}
+            <span></span>
+          {/if}
+          <button type="submit" class={buttonVariants({})}>{last ? l.finish : l.next}</button>
+        </div>
+      </div>
+    </div>
+  }
+}
+
+export interface FrameLabels {
+  move: string;
+  remove: string;
+  retry: string;
+}
+
+export const DEFAULT_FRAME_LABELS: FrameLabels = { move: "Move widget", remove: "Remove widget", retry: "Retry" };
+
+component WidgetFrame(id: string, title: string, editing?: boolean, failed?: string | null, href?: string, span?: number, labels?: FrameLabels, onRemove?: (id: string) => unknown, children: Html, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_FRAME_LABELS
+  function remove() {
+    return onRemove ? onRemove(id) : undefined
+  }
+  view {
+    <section data-slot="widget-frame" data-widget={id} data-editing={editing ? "true" : "false"} aria-label={title} style={`--span:${Math.max(1, Math.min(span ?? 1, 4))}`} class={cn("bg-card text-card-foreground group/widget flex min-h-32 flex-col rounded-xl border shadow-sm md:col-span-[var(--span)] data-[editing=true]:ring-primary/40 data-[editing=true]:ring-2", attrs.class)} {...attrs}>
+      <header class="flex items-center gap-2 px-4 pt-3">
+        {#if editing}
+          <span data-drag-handle="" role="button" tabindex="0" aria-label={l.move} class="text-muted-foreground hover:text-foreground -ms-1 cursor-grab"><Icon name="grip" /></span>
+        {/if}
+        <h3 class="flex-1 truncate text-sm font-medium">
+          {#if href}
+            <a href={href} class="hover:underline">{title}</a>
+          {:else}
+            {title}
+          {/if}
+        </h3>
+        {#if editing && onRemove}
+          <button type="button" class={cn(buttonVariants({ variant: "ghost", size: "icon" }), "size-7")} aria-label={l.remove} @click={remove}><Icon name="x" /></button>
+        {/if}
+      </header>
+      <div class="flex flex-1 flex-col p-4 pt-2">
+        {#if failed}
+          <div role="alert" class="text-destructive flex flex-1 items-center justify-center gap-2 text-sm">
+            <Icon name="alert" />
+            {failed}
+          </div>
+        {:else}
+          {children}
+        {/if}
+      </div>
+    </section>
+  }
+}
+
+export interface Editor {
+  id: string;
+  name: string;
+  image?: string | null;
+}
+
+component PresenceBadge(people: () => Editor[], self?: string, label: (names: string[]) => string, ...attrs: Attrs) {
+  derived others = people().filter((p) => p.id !== self)
+  view {
+    {#if others.length}
+      <div role="status" data-slot="presence-badge" class={cn("bg-chart-4/10 text-chart-4 border-chart-4/30 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium", attrs.class)} {...attrs}>
+        <span class="flex -space-x-1.5">
+          {#each others.slice(0, 3) as p (p.id)}
+            {#if p.image}
+              <img src={p.image} alt="" class="ring-background size-5 rounded-full object-cover ring-2" />
+            {:else}
+              <span class="bg-primary ring-background flex size-5 items-center justify-center rounded-full text-[10px] text-primary-foreground ring-2">{p.name.slice(0, 1).toUpperCase()}</span>
+            {/if}
+          {/each}
+        </span>
+        {label(others.map((p) => p.name))}
+      </div>
+    {/if}
+  }
+}
+
+export interface DropLabels {
+  title: string;
+  hint: string;
+  browse: string;
+  uploading: string;
+  failed: string;
+  tooLarge: string;
+  retry: string;
+}
+
+export const DEFAULT_DROP_LABELS: DropLabels = { title: "Drop files here", hint: "or click to browse", browse: "Browse files", uploading: "Uploading…", failed: "Upload failed", tooLarge: "File is too large", retry: "Retry" };
+
+component FileDropzone(name: string, accept?: string, multiple?: boolean, maxBytes?: number, uploadKind?: string, labels?: DropLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_DROP_LABELS
+  client signal over = false
+  client signal picked = ""
+  client signal percent = -1
+  client signal failed = ""
+  client function zone(el: HTMLElement, max: number) {
+    const kind = el.dataset.kind ?? ""
+    const tooLarge = el.dataset.tooLarge ?? ""
+    const failedText = el.dataset.failed ?? ""
+    const input = el.querySelector<HTMLInputElement>("input[type=file]")
+    const ids = el.querySelector<HTMLInputElement>("input[data-upload-ids]")
+    if (!input) return
+    let abort: AbortController | null = null
+    const upload = (files: File[]) => {
+      if (!kind || !ids) return
+      abort?.abort()
+      abort = new AbortController()
+      const signal = abort.signal
+      const total = files.reduce((n, f) => n + f.size, 0) || 1
+      const done = new Map<File, number>()
+      percent = 0
+      failed = ""
+      ids.value = ""
+      const out: string[] = []
+      let chain: Promise<unknown> = Promise.resolve()
+      for (const f of files) {
+        chain = chain.then(() =>
+          uploadFile(f, kind, {
+            signal,
+            onProgress: (sent) => {
+              done.set(f, sent)
+              percent = Math.round(([...done.values()].reduce((a, b) => a + b, 0) / total) * 100)
+            },
+          }).then((r) => {
+            out.push(r.id)
+          }),
+        )
+      }
+      chain.then(
+        () => {
+          ids.value = out.join(",")
+          percent = 100
+          input.value = ""
+          ids.dispatchEvent(new Event("change", { bubbles: true }))
+        },
+        (err: unknown) => {
+          if (signal.aborted) return
+          percent = -1
+          failed = (err as Error)?.message || failedText
+        },
+      )
+    }
+    const show = () => {
+      const files = [...(input.files ?? [])]
+      const big = files.find((f) => max > 0 && f.size > max)
+      if (big) {
+        input.value = ""
+        input.setCustomValidity(`${tooLarge}: ${big.name}`)
+        input.reportValidity()
+        picked = ""
+        return
+      }
+      input.setCustomValidity("")
+      picked = files.map((f) => f.name).join(", ")
+      if (files.length) upload(files)
+    }
+    const enter = (e: DragEvent) => {
+      e.preventDefault()
+      over = true
+    }
+    const leave = () => {
+      over = false
+    }
+    const drop = (e: DragEvent) => {
+      e.preventDefault()
+      over = false
+      if (e.dataTransfer?.files.length) {
+        input.files = e.dataTransfer.files
+        show()
+      }
+    }
+    el.addEventListener("dragover", enter)
+    el.addEventListener("dragleave", leave)
+    el.addEventListener("drop", drop)
+    input.addEventListener("change", show)
+    return () => {
+      abort?.abort()
+      el.removeEventListener("dragover", enter)
+      el.removeEventListener("dragleave", leave)
+      el.removeEventListener("drop", drop)
+      input.removeEventListener("change", show)
+    }
+  }
+  view {
+    <label data-slot="file-dropzone" :data-over={over ? "true" : "false"} class={cn("border-input hover:border-primary/60 data-[over=true]:border-primary data-[over=true]:bg-primary/5 focus-within:ring-ring/50 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors focus-within:ring-[3px]", attrs.class)} data-kind={uploadKind ?? ""} data-too-large={l.tooLarge} data-failed={l.failed} use:zone={maxBytes ?? 0} {...attrs}>
+      <span class="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full"><Icon name="upload" class="size-5" /></span>
+      <span class="text-sm font-medium">{l.title}</span>
+      <span class="text-muted-foreground text-xs">{l.hint}</span>
+      <span :hidden={!picked} class="text-foreground max-w-full truncate font-mono text-xs" aria-live="polite">{picked}</span>
+      <span :hidden={percent < 0} class="flex w-full max-w-xs flex-col gap-1">
+        <span class="text-muted-foreground text-xs">{l.uploading}</span>
+        <progress max="100" :value={String(Math.max(0, percent))} aria-label={l.uploading} class="accent-primary h-2 w-full"></progress>
+      </span>
+      <span :hidden={!failed} role="alert" class="text-destructive text-xs">{failed}</span>
+      {#if uploadKind}
+        <input type="file" accept={accept} multiple={multiple} aria-label={l.browse} class="sr-only" />
+        <input type="hidden" name={name} data-upload-ids="" />
+      {:else}
+        <input type="file" name={name} accept={accept} multiple={multiple} aria-label={l.browse} class="sr-only" />
+      {/if}
+    </label>
+  }
+}

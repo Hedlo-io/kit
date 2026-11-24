@@ -1,0 +1,239 @@
+import type { WeftEvent } from "@weft-framework/runtime";
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { inputClass } from "../ui/input.wx";
+import { Icon } from "./icons.wx";
+import { relativeTime } from "./overlays.wx";
+
+export interface RoleChoice {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export interface MemberEntry {
+  id: string;
+  name: string;
+  email?: string;
+  avatar?: string | null;
+  roles: string[];
+  inheritedFrom?: string | null;
+  pending?: boolean;
+  lastSeen?: number | null;
+}
+
+export interface MemberLabels {
+  title: string;
+  role: string;
+  remove: string;
+  confirmRemove: string;
+  cancel: string;
+  invite: string;
+  email: string;
+  send: string;
+  pending: string;
+  inherited: (from: string) => string;
+  you: string;
+  empty: string;
+  seen: string;
+}
+
+export const DEFAULT_MEMBER_LABELS: MemberLabels = {
+  title: "Members",
+  role: "Role",
+  remove: "Remove",
+  confirmRemove: "Yes, remove",
+  cancel: "Cancel",
+  invite: "Invite someone",
+  email: "Email address",
+  send: "Send invite",
+  pending: "Invited",
+  inherited: (from) => `via ${from}`,
+  you: "you",
+  empty: "No members yet.",
+  seen: "Last seen",
+};
+
+component MemberList(members: () => MemberEntry[], roles: RoleChoice[], self: string, canManage: boolean, onRole?: (user: string, role: string) => unknown, onRemove?: (user: string) => unknown, onInvite?: (email: string, role: string) => unknown, now?: () => number, locale?: string, labels?: MemberLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_MEMBER_LABELS
+  derived list = members()
+  derived t = now ? now() : Date.now()
+  signal inviteError = ""
+  signal confirming = ""
+  function changeRole(user: string, e: WeftEvent) {
+    const role = String(e.value ?? "")
+    if (!roles.some((r) => r.id === role) || !onRole) return
+    return onRole(user, role)
+  }
+  function ask(user: string) {
+    confirming = user
+  }
+  function cancel() {
+    confirming = ""
+  }
+  function remove(user: string) {
+    confirming = ""
+    return onRemove ? onRemove(user) : undefined
+  }
+  function invite(e: WeftEvent) {
+    const email = String(e.form?.email ?? "").trim()
+    const role = String(e.form?.role ?? "")
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !roles.some((r) => r.id === role)) {
+      inviteError = l.email
+      return
+    }
+    inviteError = ""
+    return onInvite ? onInvite(email, role) : undefined
+  }
+  view {
+    <section aria-label={l.title} data-slot="member-list" class={cn("flex flex-col gap-4", attrs.class)} {...attrs}>
+      {#if canManage && onInvite}
+        <form class="bg-card flex flex-col gap-2 rounded-xl border p-4 sm:flex-row sm:items-end" @submit.prevent={invite}>
+          <label class="flex flex-1 flex-col gap-1 text-sm">
+            <span class="font-medium">{l.invite}</span>
+            <input type="email" name="email" required autocomplete="off" placeholder={l.email} aria-invalid={inviteError ? "true" : undefined} class={inputClass} />
+          </label>
+          <select name="role" aria-label={l.role} class={cn(inputClass, "sm:w-44")}>
+            {#each roles as r (r.id)}
+              <option value={r.id}>{r.label}</option>
+            {/each}
+          </select>
+          <button type="submit" class={buttonVariants({})} :busy><Icon name="mail" />{l.send}</button>
+          {#if inviteError}
+            <p role="alert" class="text-destructive text-sm">{inviteError}</p>
+          {/if}
+        </form>
+      {/if}
+      {#if list.length === 0}
+        <p class="text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">{l.empty}</p>
+      {:else}
+        <ul class="divide-y rounded-xl border">
+          {#each list as m (m.id)}
+            <li class="flex flex-wrap items-center gap-3 px-4 py-3">
+              {#if m.avatar}
+                <img src={m.avatar} alt="" class="size-9 rounded-full object-cover" />
+              {:else}
+                <span class="bg-muted flex size-9 items-center justify-center rounded-full text-xs font-medium">{m.name.slice(0, 2).toUpperCase()}</span>
+              {/if}
+              <div class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-sm font-medium">
+                  {m.name}
+                  {#if m.id === self}
+                    <span class="text-muted-foreground font-normal"> ({l.you})</span>
+                  {/if}
+                </span>
+                <span class="text-muted-foreground truncate text-xs">
+                  {m.email ?? ""}
+                  {#if m.lastSeen}
+                    · {l.seen} {relativeTime(m.lastSeen, t, locale ?? "en")}
+                  {/if}
+                </span>
+              </div>
+              {#if m.pending}
+                <span class="bg-chart-4/15 text-chart-4 rounded-full px-2 py-0.5 text-xs">{l.pending}</span>
+              {/if}
+              {#if m.inheritedFrom}
+                <span class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">{l.inherited(m.inheritedFrom)}</span>
+              {/if}
+              {#if canManage && onRole && !m.inheritedFrom && m.id !== self}
+                <select aria-label={`${l.role}: ${m.name}`} class={cn(inputClass, "h-8 w-40")} @change={changeRole(m.id)}>
+                  {#each roles as r (r.id)}
+                    <option value={r.id} selected={m.roles.includes(r.id)}>{r.label}</option>
+                  {/each}
+                </select>
+              {:else}
+                <span class="text-muted-foreground text-xs">{m.roles.map((id) => roles.find((r) => r.id === id)?.label ?? id).join(", ")}</span>
+              {/if}
+              {#if canManage && onRemove && !m.inheritedFrom && m.id !== self}
+                {#if confirming === m.id}
+                  <span class="flex gap-1">
+                    <button type="button" class={buttonVariants({ variant: "destructive", size: "sm" })} @click={remove(m.id)} :busy>{l.confirmRemove}</button>
+                    <button type="button" class={buttonVariants({ variant: "ghost", size: "sm" })} @click={cancel}>{l.cancel}</button>
+                  </span>
+                {:else}
+                  <button type="button" class={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-destructive")} @click={ask(m.id)}>{l.remove}</button>
+                {/if}
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+  }
+}
+
+export interface PermissionEntry {
+  id: string;
+  label: string;
+  description?: string;
+  group: string;
+}
+
+export interface MatrixLabels {
+  title: string;
+  permission: string;
+  locked: string;
+  save: string;
+}
+
+export const DEFAULT_MATRIX_LABELS: MatrixLabels = { title: "Permissions", permission: "Permission", locked: "Built-in role", save: "Save" };
+
+export function permissionGroups(perms: readonly PermissionEntry[]): { group: string; items: PermissionEntry[] }[] {
+  const out: { group: string; items: PermissionEntry[] }[] = [];
+  for (const p of perms) {
+    const g = out.find((x) => x.group === p.group);
+    if (g) g.items.push(p);
+    else out.push({ group: p.group, items: [p] });
+  }
+  return out;
+}
+
+export interface MatrixRole extends RoleChoice {
+  grants: string[];
+  locked?: boolean;
+}
+
+component PermissionMatrix(roles: MatrixRole[], permissions: PermissionEntry[], name?: string, editable?: boolean, labels?: MatrixLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_MATRIX_LABELS
+  derived groups = permissionGroups(permissions)
+  view {
+    <div data-slot="permission-matrix" class={cn("overflow-x-auto rounded-xl border", attrs.class)} {...attrs}>
+      <table class="w-full text-sm">
+        <caption class="sr-only">{l.title}</caption>
+        <thead class="bg-muted/40 sticky top-0">
+          <tr>
+            <th scope="col" class="px-4 py-2 text-start font-medium">{l.permission}</th>
+            {#each roles as r (r.id)}
+              <th scope="col" class="px-3 py-2 text-center font-medium whitespace-nowrap">
+                {r.label}
+                {#if r.locked}
+                  <span class="sr-only"> ({l.locked})</span>
+                {/if}
+              </th>
+            {/each}
+          </tr>
+        </thead>
+        {#each groups as g (g.group)}
+          <tbody class="border-t">
+            <tr>
+              <th scope="rowgroup" colspan={String(roles.length + 1)} class="text-muted-foreground bg-muted/20 px-4 py-1.5 text-start text-xs font-medium tracking-wide uppercase">{g.group}</th>
+            </tr>
+            {#each g.items as p (p.id)}
+              <tr class="hover:bg-muted/30 border-t">
+                <th scope="row" class="px-4 py-2 text-start font-normal">
+                  <span class="block">{p.label}</span>
+                  <code class="text-muted-foreground font-mono text-xs">{p.id}</code>
+                </th>
+                {#each roles as r (r.id)}
+                  <td class="px-3 py-2 text-center">
+                    <input type="checkbox" name={`${name ?? "grants"}.${r.id}`} value={p.id} checked={r.grants.includes(p.id) || r.grants.includes("*")} disabled={!editable || r.locked} aria-label={`${r.label}: ${p.label}`} class="accent-primary size-4" />
+                  </td>
+                {/each}
+              </tr>
+            {/each}
+          </tbody>
+        {/each}
+      </table>
+    </div>
+  }
+}

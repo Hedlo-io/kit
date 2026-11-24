@@ -1,0 +1,28 @@
+{
+  "name": "kit-ui-check",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node ../sync.mjs src/components/kit",
+    "check": "npm run sync && weft check ."
+  },
+  "dependencies": {
+    "@weft-framework/core": "^0.0.6",
+    "@weft-framework/data": "^0.0.6",
+    "@weft-framework/i18n": "^0.0.6",
+    "@weft-framework/runtime": "^0.0.6",
+    "@weft-framework/server": "^0.0.6",
+    "@weft-framework/theme": "^0.0.6",
+    "@weft-framework/ui": "^0.0.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/node": "^4.3.5",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

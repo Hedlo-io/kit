@@ -1,0 +1,11 @@
+{
+  "packages": [
+    {
+      "name": "@hedlo/kit",
+      "dir": "packages/platform",
+      "description": "Shared platform layer for Hedlo apps: sign-in, access and tenancy, plugins, branding, content, email templates and translations, built on Weft",
+      "keywords": ["hedlo", "weft", "platform", "plugins", "tenancy"],
+      "homepage": "https://hedlo.io"
+    }
+  ]
+}

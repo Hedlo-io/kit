@@ -1,0 +1,404 @@
+import type { WeftEvent } from "@weft-framework/runtime";
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { inputClass } from "../ui/input.wx";
+import { QrCode } from "../ui/qr-code.wx";
+import { Icon } from "./icons.wx";
+import { CopyButton } from "./fields.wx";
+import { relativeTime } from "./overlays.wx";
+
+export interface TwoFactorLabels {
+  title: string;
+  scan: string;
+  manual: string;
+  code: string;
+  verify: string;
+  invalid: string;
+  qr: string;
+  codesTitle: string;
+  codesHint: string;
+  saved: string;
+}
+
+export const DEFAULT_TWO_FACTOR_LABELS: TwoFactorLabels = {
+  title: "Set up two-factor sign-in",
+  scan: "Scan this code with your authenticator app.",
+  manual: "Or enter this key by hand",
+  code: "Code from your app",
+  verify: "Turn on",
+  invalid: "That code did not match. Try the newest one.",
+  qr: "Authenticator QR code",
+  codesTitle: "Keep these recovery codes somewhere safe",
+  codesHint: "Each one signs you in once without your phone. They are shown only now.",
+  saved: "I saved them",
+};
+
+export function groupSecret(secret: string): string {
+  return secret.replace(/\s+/g, "").replace(/(.{4})/g, "$1 ").trim();
+}
+
+component TwoFactorSetup(uri: string, secret: string, onVerify: (code: string) => Promise<string[] | null> | string[] | null, doneHref: string, labels?: TwoFactorLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_TWO_FACTOR_LABELS
+  signal codes = [] as string[]
+  signal failed = false
+  function verify(e: WeftEvent) {
+    const code = String(e.form?.code ?? "").replace(/\s+/g, "")
+    if (!/^\d{6,8}$/.test(code)) {
+      failed = true
+      return
+    }
+    return Promise.resolve(onVerify(code)).then((r) => {
+      if (r === null) {
+        failed = true
+        return
+      }
+      failed = false
+      codes = r
+    })
+  }
+  view {
+    <div data-slot="two-factor-setup" class={cn("flex flex-col gap-6", attrs.class)} {...attrs}>
+      {#if codes.length}
+        <div role="status" class="flex max-w-md flex-col gap-3">
+          <p class="font-medium">{l.codesTitle}</p>
+          <p class="text-muted-foreground text-sm">{l.codesHint}</p>
+          <pre class="bg-muted grid grid-cols-2 gap-x-6 rounded-lg p-4 font-mono text-sm leading-7 select-all">{codes.join("\n")}</pre>
+          <div class="flex gap-2">
+            <CopyButton value={codes.join("\n")} />
+            <a href={doneHref} class={buttonVariants({ size: "sm" })}>{l.saved}</a>
+          </div>
+        </div>
+      {:else}
+        <h3 class="font-medium">{l.title}</h3>
+        <div class="flex flex-col gap-6 sm:flex-row">
+          <QrCode value={uri} label={l.qr} class="shrink-0" />
+          <div class="flex flex-col gap-4">
+            <p class="text-muted-foreground text-sm">{l.scan}</p>
+            <div class="flex flex-col gap-1">
+              <span class="text-muted-foreground text-xs">{l.manual}</span>
+              <div class="flex items-center gap-2">
+                <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all">{groupSecret(secret)}</code>
+                <CopyButton value={secret.replace(/\s+/g, "")} />
+              </div>
+            </div>
+            <form class="flex flex-col gap-2" @submit.prevent={verify}>
+              <label for="kit-2fa-code" class="text-sm font-medium">{l.code}</label>
+              <div class="flex gap-2">
+                <input id="kit-2fa-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,9}" required aria-invalid={failed ? "true" : undefined} aria-describedby={failed ? "kit-2fa-error" : undefined} class={cn(inputClass, "w-40 font-mono tracking-widest")} />
+                <button type="submit" class={buttonVariants({})} :busy>{l.verify}</button>
+              </div>
+              {#if failed}
+                <p id="kit-2fa-error" role="alert" class="text-destructive text-sm">{l.invalid}</p>
+              {/if}
+            </form>
+          </div>
+        </div>
+      {/if}
+    </div>
+  }
+}
+
+export interface PasskeyEntry {
+  id: string;
+  name: string;
+  created: number;
+  lastUsed: number | null;
+  backedUp: boolean;
+}
+
+export interface PasskeyLabels {
+  title: string;
+  empty: string;
+  add: string;
+  name: string;
+  remove: string;
+  created: string;
+  used: string;
+  never: string;
+  synced: string;
+  unsupported: string;
+}
+
+export const DEFAULT_PASSKEY_LABELS: PasskeyLabels = {
+  title: "Passkeys",
+  empty: "No passkeys yet.",
+  add: "Add passkey",
+  name: "Passkey name",
+  remove: "Remove",
+  created: "Added",
+  used: "Last used",
+  never: "never",
+  synced: "Synced",
+  unsupported: "This browser cannot make passkeys.",
+};
+
+component PasskeyList(keys: () => PasskeyEntry[], onRemove: (id: string) => unknown, onAdd?: (name: string) => Promise<unknown> | unknown, now?: () => number, locale?: string, labels?: PasskeyLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_PASSKEY_LABELS
+  derived list = keys()
+  derived t = now ? now() : Date.now()
+  function remove(id: string) {
+    return onRemove(id)
+  }
+  function add(e: WeftEvent) {
+    const name = String(e.form?.name ?? "").trim().slice(0, 60)
+    return onAdd ? onAdd(name) : undefined
+  }
+  view {
+    <section aria-label={l.title} data-slot="passkey-list" class={cn("flex flex-col gap-3", attrs.class)} {...attrs}>
+      {#if list.length === 0}
+        <p class="text-muted-foreground text-sm">{l.empty}</p>
+      {:else}
+        <ul class="bg-card divide-y rounded-2xl border">
+          {#each list as k (k.id)}
+            <li class="flex items-center gap-3 px-4 py-3">
+              <Icon name="key" class="text-muted-foreground" />
+              <div class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-sm font-medium">
+                  {k.name}
+                  {#if k.backedUp}
+                    <span class="bg-muted text-muted-foreground ms-2 rounded-full px-2 py-0.5 text-xs font-normal">{l.synced}</span>
+                  {/if}
+                </span>
+                <span class="text-muted-foreground text-xs">{l.created} {relativeTime(k.created, t, locale ?? "en")} · {l.used} {k.lastUsed ? relativeTime(k.lastUsed, t, locale ?? "en") : l.never}</span>
+              </div>
+              <button type="button" class={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-destructive")} @click={remove(k.id)} :busy>{l.remove}</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if onAdd}
+        <form class="flex flex-wrap items-center gap-2" @submit.prevent={add}>
+          <input name="name" maxlength="60" placeholder={l.name} aria-label={l.name} class={cn(inputClass, "w-56")} />
+          <button type="submit" class={buttonVariants({ variant: "outline" })} :busy><Icon name="plus" />{l.add}</button>
+        </form>
+      {/if}
+    </section>
+  }
+}
+
+export interface SessionEntry {
+  id: string;
+  current: boolean;
+  agent: string;
+  ip?: string | null;
+  location?: string | null;
+  created: number;
+  lastSeen: number;
+}
+
+export interface SessionLabels {
+  title: string;
+  current: string;
+  signOut: string;
+  signOutOthers: string;
+  started: string;
+  active: string;
+}
+
+export const DEFAULT_SESSION_LABELS: SessionLabels = {
+  title: "Where you are signed in",
+  current: "This device",
+  signOut: "Sign out",
+  signOutOthers: "Sign out everywhere else",
+  started: "Signed in",
+  active: "Active",
+};
+
+export function agentSummary(agent: string): { browser: string; os: string; mobile: boolean } {
+  const a = agent || "";
+  const browser = /Edg\//.test(a) ? "Edge" : /OPR\//.test(a) ? "Opera" : /Firefox\//.test(a) ? "Firefox" : /Chrome\//.test(a) ? "Chrome" : /Safari\//.test(a) ? "Safari" : "Browser";
+  const os = /Windows/.test(a) ? "Windows" : /Android/.test(a) ? "Android" : /iPhone|iPad|iOS/.test(a) ? "iOS" : /Mac OS X/.test(a) ? "macOS" : /Linux/.test(a) ? "Linux" : "";
+  return { browser, os, mobile: /Mobile|Android|iPhone/.test(a) };
+}
+
+component SessionList(sessions: () => SessionEntry[], onRevoke: (id: string) => unknown, onRevokeOthers: () => unknown, now?: () => number, locale?: string, labels?: SessionLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_SESSION_LABELS
+  derived list = sessions()
+  derived t = now ? now() : Date.now()
+  function revoke(id: string) {
+    return onRevoke(id)
+  }
+  function others() {
+    return onRevokeOthers()
+  }
+  view {
+    <section aria-label={l.title} data-slot="session-list" class={cn("flex flex-col gap-3", attrs.class)} {...attrs}>
+      <ul class="bg-card divide-y rounded-2xl border">
+        {#each list as s (s.id)}
+          <li class="flex items-center gap-3 px-4 py-3">
+            <Icon name={agentSummary(s.agent).mobile ? "cpu" : "server"} class="text-muted-foreground" />
+            <div class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-sm font-medium">
+                {agentSummary(s.agent).browser}{agentSummary(s.agent).os ? " · " + agentSummary(s.agent).os : ""}
+                {#if s.current}
+                  <span class="bg-chart-2/15 text-chart-2 ms-2 rounded-full px-2 py-0.5 text-xs font-normal">{l.current}</span>
+                {/if}
+              </span>
+              <span class="text-muted-foreground truncate text-xs">
+                {s.ip ?? ""}{s.location ? " · " + s.location : ""} · {l.started} {relativeTime(s.created, t, locale ?? "en")} · {l.active} {relativeTime(s.lastSeen, t, locale ?? "en")}
+              </span>
+            </div>
+            {#if !s.current}
+              <button type="button" class={buttonVariants({ variant: "ghost", size: "sm" })} @click={revoke(s.id)} :busy>{l.signOut}</button>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      {#if list.length > 1}
+        <button type="button" class={cn(buttonVariants({ variant: "outline", size: "sm" }), "self-start")} @click={others} :busy>{l.signOutOthers}</button>
+      {/if}
+    </section>
+  }
+}
+
+export interface ApiKeyEntry {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  created: number;
+  lastUsed: number | null;
+  expires: number | null;
+  allowedIps?: string[];
+}
+
+export interface ScopeChoice {
+  id: string;
+  label: string;
+}
+
+export interface ApiKeyLabels {
+  title: string;
+  empty: string;
+  create: string;
+  name: string;
+  scopes: string;
+  ips: string;
+  ipsHint: string;
+  expires: string;
+  never: string;
+  revoke: string;
+  used: string;
+  expired: string;
+}
+
+export const DEFAULT_API_KEY_LABELS: ApiKeyLabels = {
+  title: "API keys",
+  empty: "No API keys yet.",
+  create: "Create key",
+  name: "Name",
+  scopes: "Scopes",
+  ips: "Allowed IPs",
+  ipsHint: "One address or CIDR range per line. Leave empty to allow any.",
+  expires: "Expires",
+  never: "never",
+  revoke: "Revoke",
+  used: "Last used",
+  expired: "Expired",
+};
+
+export function parseIps(src: string): string[] | null {
+  const out: string[] = [];
+  for (const raw of src.split(/[\s,]+/)) {
+    const v = raw.trim();
+    if (!v) continue;
+    const ok = /^(\d{1,3}\.){3}\d{1,3}(\/(\d|[12]\d|3[0-2]))?$/.test(v) || /^[0-9a-f:]+(\/\d{1,3})?$/i.test(v);
+    if (!ok) return null;
+    out.push(v);
+  }
+  return out;
+}
+
+component ApiKeyList(keys: () => ApiKeyEntry[], scopes: ScopeChoice[], onCreate: (input: { name: string; scopes: string[]; expiresDays: number | null; ips: string[] }) => unknown, onRevoke: (id: string) => unknown, now?: () => number, locale?: string, labels?: ApiKeyLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_API_KEY_LABELS
+  derived list = keys()
+  derived t = now ? now() : Date.now()
+  signal formError = ""
+  function revoke(id: string) {
+    return onRevoke(id)
+  }
+  function create(e: WeftEvent) {
+    const f = e.form ?? {}
+    const name = String(f.name ?? "").trim().slice(0, 60)
+    const picked = scopes.filter((s) => f[`scope.${s.id}`] !== undefined && f[`scope.${s.id}`] !== "").map((s) => s.id)
+    const ips = parseIps(String(f.ips ?? ""))
+    const days = Number(f.expires ?? 0)
+    if (!name || ips === null) {
+      formError = !name ? l.name : l.ips
+      return
+    }
+    formError = ""
+    return onCreate({ name, scopes: picked, expiresDays: Number.isFinite(days) && days > 0 ? days : null, ips })
+  }
+  view {
+    <section aria-label={l.title} data-slot="api-key-list" class={cn("flex flex-col gap-4", attrs.class)} {...attrs}>
+      <form class="bg-card grid gap-4 rounded-2xl border p-4 md:grid-cols-2" @submit.prevent={create}>
+        <label class="flex flex-col gap-1 text-sm">
+          <span class="font-medium">{l.name}</span>
+          <input name="name" required maxlength="60" class={inputClass} />
+        </label>
+        <label class="flex flex-col gap-1 text-sm">
+          <span class="font-medium">{l.expires}</span>
+          <select name="expires" class={inputClass}>
+            <option value="0">{l.never}</option>
+            <option value="7">7 d</option>
+            <option value="30">30 d</option>
+            <option value="90">90 d</option>
+            <option value="365">365 d</option>
+          </select>
+        </label>
+        <fieldset class="flex flex-col gap-2 md:col-span-2">
+          <legend class="mb-1 text-sm font-medium">{l.scopes}</legend>
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {#each scopes as s (s.id)}
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name={`scope.${s.id}`} value="1" class="accent-primary size-4" />
+                <span>{s.label}</span>
+                <code class="text-muted-foreground font-mono text-xs">{s.id}</code>
+              </label>
+            {/each}
+          </div>
+        </fieldset>
+        <label class="flex flex-col gap-1 text-sm md:col-span-2">
+          <span class="font-medium">{l.ips}</span>
+          <textarea name="ips" rows="2" spellcheck="false" class={cn(inputClass, "h-auto py-2 font-mono text-xs")}></textarea>
+          <span class="text-muted-foreground text-xs">{l.ipsHint}</span>
+        </label>
+        <div class="flex items-center gap-3 md:col-span-2">
+          <button type="submit" class={buttonVariants({})} :busy><Icon name="key" />{l.create}</button>
+          {#if formError}
+            <p role="alert" class="text-destructive text-sm">{formError}</p>
+          {/if}
+        </div>
+      </form>
+      {#if list.length === 0}
+        <p class="text-muted-foreground text-sm">{l.empty}</p>
+      {:else}
+        <ul class="bg-card divide-y rounded-2xl border">
+          {#each list as k (k.id)}
+            <li class="flex flex-wrap items-center gap-3 px-4 py-3">
+              <div class="flex min-w-0 flex-1 flex-col gap-1">
+                <span class="flex items-center gap-2 text-sm font-medium">
+                  {k.name}
+                  <code class="bg-muted rounded-md px-1.5 py-0.5 font-mono text-xs font-normal">{k.prefix}…</code>
+                  {#if k.expires !== null && k.expires < t}
+                    <span class="bg-destructive/15 text-destructive rounded-full px-2 py-0.5 text-xs font-normal">{l.expired}</span>
+                  {/if}
+                </span>
+                <span class="text-muted-foreground text-xs">{l.used} {k.lastUsed ? relativeTime(k.lastUsed, t, locale ?? "en") : l.never} · {l.expires} {k.expires ? relativeTime(k.expires, t, locale ?? "en") : l.never}</span>
+                {#if k.scopes.length}
+                  <span class="flex flex-wrap gap-1">
+                    {#each k.scopes as s (s)}
+                      <code class="bg-muted text-muted-foreground rounded-md px-1 font-mono text-[10px]">{s}</code>
+                    {/each}
+                  </span>
+                {/if}
+              </div>
+              <button type="button" class={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-destructive")} @click={revoke(k.id)} :busy>{l.revoke}</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+  }
+}

@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+/* Design tokens: every --color-*, --font-*, --radius-* here is also a
+   utility (bg-accent, font-sans, rounded-card). */
+@theme {
+  --color-ink: #1d2433;
+  --color-paper: #f8f7f4;
+  --color-muted: #5d6475;
+  --color-line: #dedbd2;
+  --color-accent: #2c5d8f;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* The starter's styles, under the utilities. */
+@layer base {
+:root {
+  --ink: var(--color-ink);
+  --paper: var(--color-paper);
+  --muted: var(--color-muted);
+  --line: var(--color-line);
+  --accent: var(--color-accent);
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+}
+
+.site-header,
+.content,
+.site-footer {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 650;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+nav a {
+  margin-left: 1rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+nav a.active {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+.content {
+  padding-top: 2rem;
+  padding-bottom: 3rem;
+}
+
+.site-footer {
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding-bottom: 2rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.counter {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--ink);
+}
+}

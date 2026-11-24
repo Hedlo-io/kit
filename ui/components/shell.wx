@@ -1,0 +1,312 @@
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger } from "../ui/sidebar.wx";
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu.wx";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "../ui/breadcrumb.wx";
+import { Icon } from "./icons.wx";
+
+export interface NavEntry {
+  id: string;
+  title: string;
+  href: string;
+  icon?: string | null;
+  pinned?: boolean;
+  newTab?: boolean;
+  badge?: string | number | null;
+}
+
+export interface NavGroup {
+  id: string;
+  label?: string;
+  items: NavEntry[];
+}
+
+export interface TenantChoice {
+  id: string;
+  name: string;
+  kind?: string;
+  href: string;
+}
+
+export interface Crumb {
+  title: string;
+  href?: string;
+}
+
+export interface Brand {
+  name: string;
+  logo?: string | null;
+  href?: string;
+  tagline?: string;
+}
+
+export interface ShellLabels {
+  nav: string;
+  toggle: string;
+  pinned: string;
+  switchTenant: string;
+  breadcrumb: string;
+}
+
+export const DEFAULT_SHELL_LABELS: ShellLabels = {
+  nav: "Main navigation",
+  toggle: "Toggle sidebar",
+  pinned: "Pinned",
+  switchTenant: "Switch workspace",
+  breadcrumb: "Breadcrumb",
+};
+
+export function isActive(path: string, href: string): boolean {
+  if (href === "/") return path === "/";
+  return path === href || path.startsWith(href.endsWith("/") ? href : `${href}/`);
+}
+
+export function pinnedOf(groups: readonly NavGroup[]): NavEntry[] {
+  return groups.flatMap((g) => g.items.filter((i) => i.pinned === true));
+}
+
+component NavLinkItem(item: NavEntry, path: string) {
+  view {
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        href={item.href}
+        active={isActive(path, item.href)}
+        class="text-muted-foreground hover:bg-muted hover:text-foreground aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary h-9 gap-3 rounded-lg px-3 font-medium [&_svg]:size-4"
+        target={item.newTab ? "_blank" : undefined}
+        rel={item.newTab ? "noopener noreferrer" : undefined}
+      >
+        <Icon name={item.icon ?? "dot"} />
+        <span class="truncate">{item.title}</span>
+      </SidebarMenuButton>
+      {#if item.badge !== undefined && item.badge !== null && item.badge !== 0}
+        <SidebarMenuBadge class="bg-primary text-primary-foreground top-2 end-2 h-5 rounded-full px-1.5 text-[0.65rem] font-semibold">{String(item.badge)}</SidebarMenuBadge>
+      {/if}
+    </SidebarMenuItem>
+  }
+}
+
+component TenantSwitcher(current: TenantChoice, choices: TenantChoice[], label: string) {
+  view {
+    <DropdownMenuTrigger
+      menu="kit-tenant-menu"
+      variant="ghost"
+      class="h-auto w-full justify-start gap-2 px-2 py-1.5"
+    >
+      <span class="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold">{current.name.slice(0, 1).toUpperCase()}</span>
+      <span class="flex min-w-0 flex-1 flex-col text-start leading-tight">
+        <span class="truncate text-sm font-medium">{current.name}</span>
+        {#if current.kind}
+          <span class="text-muted-foreground truncate text-xs">{current.kind}</span>
+        {/if}
+      </span>
+      <Icon name="chevron-down" class="text-muted-foreground" />
+    </DropdownMenuTrigger>
+    <DropdownMenuContent id="kit-tenant-menu" placement="bottom-start">
+      <DropdownMenuLabel>{label}</DropdownMenuLabel>
+      {#each choices as t (t.id)}
+        <DropdownMenuItem href={t.href} aria-current={t.id === current.id ? "true" : undefined}>
+          <span class="truncate">{t.name}</span>
+          {#if t.id === current.id}
+            <Icon name="check" class="ms-auto" />
+          {/if}
+        </DropdownMenuItem>
+      {/each}
+    </DropdownMenuContent>
+  }
+}
+
+component AppShell(brand: Brand, groups: NavGroup[], path: string, topbar?: Html, tenant?: TenantChoice, tenants?: TenantChoice[], footer?: Html, labels?: ShellLabels, collapsed?: boolean, children: Html, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_SHELL_LABELS
+  derived pins = pinnedOf(groups)
+  view {
+    <SidebarProvider collapsed={collapsed} class={cn("bg-muted/30", attrs.class)} {...attrs}>
+      <Sidebar label={l.nav} collapsible="icon" class="bg-card border-e">
+        <SidebarHeader class="h-16 shrink-0 justify-center border-b px-4 py-0">
+          <a href={brand.href ?? "/"} class="flex min-w-0 items-center gap-2.5 rounded-lg px-1 py-1">
+            {#if brand.logo}
+              <img src={brand.logo} alt="" class="size-8 shrink-0 rounded-lg object-contain" />
+            {:else}
+              <span class="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold">{brand.name.slice(0, 1).toUpperCase()}</span>
+            {/if}
+            <span class="min-w-0 leading-tight md:group-data-[state=collapsed]/sidebar-wrapper:hidden">
+              <span class="text-foreground block truncate text-sm font-semibold">{brand.name}</span>
+              {#if brand.tagline}
+                <span class="text-muted-foreground block truncate text-xs">{brand.tagline}</span>
+              {/if}
+            </span>
+          </a>
+        </SidebarHeader>
+        {#if tenant && tenants && tenants.length > 1}
+          <div class="border-b p-3 md:group-data-[state=collapsed]/sidebar-wrapper:hidden">
+            <TenantSwitcher current={tenant} choices={tenants} label={l.switchTenant} />
+          </div>
+        {/if}
+        <SidebarContent class="gap-2 px-1 py-3">
+          {#if pins.length}
+            <SidebarGroup label={l.pinned}>
+              <SidebarMenu>
+                {#each pins as item (item.id)}
+                  <NavLinkItem item={item} path={path} />
+                {/each}
+              </SidebarMenu>
+            </SidebarGroup>
+          {/if}
+          {#each groups as g (g.id)}
+            <SidebarGroup label={g.label}>
+              <SidebarMenu>
+                {#each g.items as item (item.id)}
+                  {#if !item.pinned}
+                    <NavLinkItem item={item} path={path} />
+                  {/if}
+                {/each}
+              </SidebarMenu>
+            </SidebarGroup>
+          {/each}
+        </SidebarContent>
+        {#if footer}
+          <SidebarFooter class="border-t p-3">{footer}</SidebarFooter>
+        {/if}
+        <SidebarRail label={l.toggle} />
+      </Sidebar>
+      <SidebarInset class="bg-transparent">
+        <div class="bg-card/85 supports-[backdrop-filter]:bg-card/70 sticky top-0 z-20 flex h-16 items-center gap-3 border-b px-4 backdrop-blur sm:px-6 lg:px-10">
+          <SidebarTrigger label={l.toggle} class="text-muted-foreground -ms-1" />
+          <span aria-hidden="true" class="bg-border hidden h-5 w-px md:block"></span>
+          <div class="flex min-w-0 flex-1 items-center gap-2">{topbar}</div>
+        </div>
+        <div class="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
+  }
+}
+
+component Crumbs(items: Crumb[], label?: string) {
+  view {
+    <Breadcrumb label={label ?? "Breadcrumb"} class="min-w-0">
+      <BreadcrumbList>
+        {#each items as c, i (i)}
+          {#if i > 0}
+            <BreadcrumbSeparator />
+          {/if}
+          <BreadcrumbItem>
+            {#if c.href && i < items.length - 1}
+              <BreadcrumbLink href={c.href}>{c.title}</BreadcrumbLink>
+            {:else}
+              <BreadcrumbPage>{c.title}</BreadcrumbPage>
+            {/if}
+          </BreadcrumbItem>
+        {/each}
+      </BreadcrumbList>
+    </Breadcrumb>
+  }
+}
+
+export interface UserSummary {
+  name: string;
+  email?: string;
+  avatar?: string | null;
+}
+
+export interface MenuLink {
+  id: string;
+  title: string;
+  href: string;
+  icon?: string;
+  danger?: boolean;
+}
+
+component UserMenu(user: UserSummary, links: MenuLink[], label: string) {
+  view {
+    <DropdownMenuTrigger
+      menu="kit-user-menu"
+      variant="ghost"
+      class="h-9 gap-2 px-2"
+      aria-label={label}
+    >
+      {#if user.avatar}
+        <img src={user.avatar} alt="" class="size-7 rounded-full object-cover" />
+      {:else}
+        <span class="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-xs font-semibold">{user.name.slice(0, 2).toUpperCase()}</span>
+      {/if}
+      <span class="hidden max-w-32 truncate text-sm md:inline">{user.name}</span>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent id="kit-user-menu" placement="bottom-end">
+      <DropdownMenuLabel>
+        <span class="block truncate">{user.name}</span>
+        {#if user.email}
+          <span class="text-muted-foreground block truncate text-xs font-normal">{user.email}</span>
+        {/if}
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {#each links as m (m.id)}
+        <DropdownMenuItem href={m.href} variant={m.danger ? "destructive" : "default"}>
+          <Icon name={m.icon ?? "dot"} />
+          {m.title}
+        </DropdownMenuItem>
+      {/each}
+    </DropdownMenuContent>
+  }
+}
+
+component ThemeToggle(mode: "light" | "dark" | "system", href: (next: "light" | "dark" | "system") => string, label: string) {
+  derived next = mode === "light" ? "dark" : mode === "dark" ? "system" : "light"
+  view {
+    <a
+      href={href(next)}
+      class={buttonVariants({ variant: "ghost", size: "icon" })}
+      aria-label={label}
+      data-mode={mode}
+    >
+      <Icon name={mode === "dark" ? "moon" : mode === "light" ? "sun" : "eye"} />
+    </a>
+  }
+}
+
+component NotificationBell(unread: () => number, href: string, label: string) {
+  derived n = unread()
+  view {
+    <a
+      href={href}
+      class={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative")}
+      aria-label={n > 0 ? `${label} (${n})` : label}
+    >
+      <Icon name="bell" />
+      {#if n > 0}
+        <span
+          class="bg-destructive absolute top-1 end-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-destructive-foreground tabular-nums"
+          aria-hidden="true"
+        >{n > 99 ? "99+" : String(n)}</span>
+      {/if}
+    </a>
+  }
+}
+
+component SearchTrigger(label: string, shortcut?: string) {
+  view {
+    <button
+      type="button"
+      data-command-open=""
+      class={cn(buttonVariants({ variant: "outline", size: "sm" }), "bg-muted/50 text-muted-foreground hover:bg-muted w-full max-w-72 justify-start gap-2 rounded-lg border-transparent font-normal")}
+    >
+      <Icon name="search" />
+      <span class="flex-1 truncate text-start">{label}</span>
+      <kbd class="bg-card pointer-events-none hidden rounded-md border px-1.5 font-mono text-[10px] font-medium sm:inline">{shortcut ?? "Ctrl K"}</kbd>
+    </button>
+  }
+}
+
+component TopBar(crumbs?: Crumb[], search?: Html, actions?: Html, ...attrs: Attrs) {
+  view {
+    <div data-slot="top-bar" class={cn("flex min-w-0 flex-1 items-center gap-3", attrs.class)} {...attrs}>
+      {#if crumbs && crumbs.length}
+        <Crumbs items={crumbs} />
+      {/if}
+      <div class="ms-auto flex items-center gap-2">
+        {#if search}
+          <div class="hidden md:block">{search}</div>
+        {/if}
+        {actions}
+      </div>
+    </div>
+  }
+}

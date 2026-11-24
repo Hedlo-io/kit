@@ -1,0 +1,86 @@
+import { cn, variants } from "../../lib/utils.ts";
+
+export type Tone = "neutral" | "success" | "warning" | "danger" | "info" | "progress";
+
+export const STATUS_TONES: Record<string, Tone> = {
+  running: "success",
+  online: "success",
+  active: "success",
+  paid: "success",
+  connected: "success",
+  healthy: "success",
+  offline: "neutral",
+  stopped: "neutral",
+  draft: "neutral",
+  cancelled: "neutral",
+  starting: "progress",
+  stopping: "progress",
+  installing: "progress",
+  restoring: "progress",
+  transferring: "progress",
+  pending: "progress",
+  suspended: "warning",
+  unpaid: "warning",
+  degraded: "warning",
+  overdue: "danger",
+  failed: "danger",
+  error: "danger",
+  crashed: "danger",
+  unreachable: "danger",
+};
+
+export function toneOf(state: string, tone?: Tone): Tone {
+  return tone ?? STATUS_TONES[state] ?? "neutral";
+}
+
+export const statusPillVariants = variants(
+  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+  {
+    tone: {
+      neutral: "bg-muted text-muted-foreground",
+      success: "bg-chart-2/15 text-chart-2",
+      warning: "bg-chart-4/15 text-chart-4",
+      danger: "bg-destructive/10 text-destructive",
+      info: "bg-primary/10 text-primary",
+      progress: "bg-primary/10 text-primary",
+    },
+  },
+  { tone: "neutral" },
+);
+
+export const statusDotVariants = variants(
+  "relative inline-flex size-2 rounded-full",
+  {
+    tone: {
+      neutral: "bg-muted-foreground",
+      success: "bg-chart-2",
+      warning: "bg-chart-4",
+      danger: "bg-destructive",
+      info: "bg-primary",
+      progress: "bg-primary",
+    },
+  },
+  { tone: "neutral" },
+);
+
+component StatusDot(state: string, tone?: Tone, ...attrs: Attrs) {
+  derived t = toneOf(state, tone)
+  view {
+    <span class={cn("relative inline-flex size-2", attrs.class)} data-slot="status-dot" data-tone={t} {...attrs}>
+      {#if t === "progress"}
+        <span class={cn(statusDotVariants({ tone: t }), "absolute inline-flex size-full animate-ping opacity-60 motion-reduce:animate-none")} aria-hidden="true"></span>
+      {/if}
+      <span class={statusDotVariants({ tone: t })} aria-hidden="true"></span>
+    </span>
+  }
+}
+
+component StatusPill(state: string, label: string, tone?: Tone, ...attrs: Attrs) {
+  derived t = toneOf(state, tone)
+  view {
+    <span role="status" data-slot="status-pill" data-state={state} data-tone={t} class={statusPillVariants({ tone: t }, attrs.class)} {...attrs}>
+      <StatusDot state={state} tone={t} />
+      {label}
+    </span>
+  }
+}

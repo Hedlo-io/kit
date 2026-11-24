@@ -1,0 +1,94 @@
+import { cn } from "../../lib/utils.ts";
+
+export interface Thresholds {
+  warn?: number;
+  danger?: number;
+}
+
+export function ratio(value: number, max: number | null | undefined): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (max === null || max === undefined || !Number.isFinite(max) || max <= 0) return 0;
+  return Math.min(1, value / max);
+}
+
+export function gaugeTone(r: number, t?: Thresholds): "ok" | "warn" | "danger" {
+  if (r >= (t?.danger ?? 0.9)) return "danger";
+  if (r >= (t?.warn ?? 0.75)) return "warn";
+  return "ok";
+}
+
+export const GAUGE_STROKE: Record<"ok" | "warn" | "danger", string> = {
+  ok: "stroke-primary",
+  warn: "stroke-chart-4",
+  danger: "stroke-destructive",
+};
+
+export const GAUGE_FILL: Record<"ok" | "warn" | "danger", string> = {
+  ok: "bg-primary",
+  warn: "bg-chart-4",
+  danger: "bg-destructive",
+};
+
+export function formatBytes(n: number, locale = "en"): string {
+  if (!Number.isFinite(n) || n < 0) return "–";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: v < 10 && i > 0 ? 1 : 0 }).format(v)} ${units[i]}`;
+}
+
+export function formatPercent(r: number, locale = "en"): string {
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(r);
+}
+
+export function arc(r: number): string {
+  const c = 2 * Math.PI * 42;
+  return `${(c * 0.75 * r).toFixed(2)} ${c.toFixed(2)}`;
+}
+
+component ResourceGauge(label: string, value: number, max?: number | null, display?: string, detail?: string, variant?: "radial" | "bar", thresholds?: Thresholds, locale?: string, ...attrs: Attrs) {
+  derived r = ratio(value, max)
+  derived tone = max ? gaugeTone(r, thresholds) : "ok"
+  derived shown = display ?? (max ? formatPercent(r, locale ?? "en") : String(value))
+  view {
+    {#if variant === "bar"}
+      <div data-slot="resource-gauge" data-tone={tone} class={cn("flex flex-col gap-1.5", attrs.class)} {...attrs}>
+        <div class="flex items-baseline justify-between gap-2 text-sm">
+          <span class="text-muted-foreground">{label}</span>
+          <span class="font-medium tabular-nums" aria-live="polite">{shown}</span>
+        </div>
+        <div role="meter" aria-label={label} aria-valuemin="0" aria-valuemax={String(max ?? 0)} aria-valuenow={String(value)} aria-valuetext={detail ?? shown} class="bg-muted h-2 w-full overflow-hidden rounded-full">
+          <div class={cn("h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none", GAUGE_FILL[tone])} style={`width:${(r * 100).toFixed(1)}%`}></div>
+        </div>
+        {#if detail}
+          <span class="text-muted-foreground text-xs tabular-nums">{detail}</span>
+        {/if}
+      </div>
+    {:else}
+      <div data-slot="resource-gauge" data-tone={tone} class={cn("flex flex-col items-center gap-1", attrs.class)} {...attrs}>
+        <div role="meter" aria-label={label} aria-valuemin="0" aria-valuemax={String(max ?? 0)} aria-valuenow={String(value)} aria-valuetext={detail ?? shown} class="relative size-24">
+          <svg viewBox="0 0 100 100" class="size-full rotate-[135deg]" aria-hidden="true">
+            <circle cx="50" cy="50" r="42" fill="none" stroke-width="8" stroke-linecap="round" class="stroke-muted" stroke-dasharray={arc(1)}></circle>
+            <circle cx="50" cy="50" r="42" fill="none" stroke-width="8" stroke-linecap="round" class={cn("transition-[stroke-dasharray] duration-500 motion-reduce:transition-none", GAUGE_STROKE[tone])} stroke-dasharray={arc(r)}></circle>
+          </svg>
+          <span class="absolute inset-0 flex items-center justify-center text-lg font-semibold tabular-nums" aria-live="polite">{shown}</span>
+        </div>
+        <span class="text-muted-foreground text-xs">{label}</span>
+        {#if detail}
+          <span class="text-muted-foreground text-xs tabular-nums">{detail}</span>
+        {/if}
+      </div>
+    {/if}
+  }
+}
+
+component QuotaBar(label: string, used: number, limit: number | null, unit?: string, unlimitedLabel?: string, locale?: string, ...attrs: Attrs) {
+  derived text = limit === null ? `${used.toLocaleString(locale ?? "en")}${unit ? " " + unit : ""} · ${unlimitedLabel ?? "∞"}` : `${used.toLocaleString(locale ?? "en")} / ${limit.toLocaleString(locale ?? "en")}${unit ? " " + unit : ""}`
+  view {
+    <ResourceGauge variant="bar" label={label} value={used} max={limit} display={text} thresholds={{ warn: 0.8, danger: 1 }} locale={locale} {...attrs} />
+  }
+}

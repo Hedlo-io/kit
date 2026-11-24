@@ -1,0 +1,127 @@
+import type { WeftEvent } from "@weft-framework/runtime";
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { inputClass } from "../ui/input.wx";
+import { Icon } from "./icons.wx";
+client import { copy } from "@weft-framework/ui"
+
+export interface CopyLabels {
+  copy: string;
+  copied: string;
+  failed: string;
+}
+
+export const DEFAULT_COPY_LABELS: CopyLabels = { copy: "Copy", copied: "Copied", failed: "Copy failed" };
+
+component CopyButton(value: string, labels?: CopyLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_COPY_LABELS
+  view {
+    <button type="button" class={cn(buttonVariants({ variant: "outline", size: "sm" }), "group shrink-0", attrs.class)} use:copy={value} {...attrs}>
+      <Icon name="copy" class="group-data-[state=copied]:hidden" />
+      <Icon name="check" class="hidden group-data-[state=copied]:inline" />
+      <span class="group-data-[state=copied]:hidden group-data-[state=failed]:hidden">{l.copy}</span>
+      <span class="hidden group-data-[state=copied]:inline" role="status">{l.copied}</span>
+      <span class="hidden group-data-[state=failed]:inline" role="alert">{l.failed}</span>
+    </button>
+  }
+}
+
+component CopyField(label: string, value: string, mono?: boolean, labels?: CopyLabels, hint?: string, ...attrs: Attrs) {
+  derived id = `copy-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+  view {
+    <div data-slot="copy-field" class={cn("flex flex-col gap-1.5", attrs.class)} {...attrs}>
+      <label for={id} class="text-sm font-medium">{label}</label>
+      <div class="flex gap-2">
+        <input id={id} readonly value={value} class={cn(inputClass, mono !== false ? "font-mono text-xs" : "")} />
+        <CopyButton value={value} labels={labels} />
+      </div>
+      {#if hint}
+        <p class="text-muted-foreground text-xs">{hint}</p>
+      {/if}
+    </div>
+  }
+}
+
+export interface SecretLabels extends CopyLabels {
+  title: string;
+  warning: string;
+  download: string;
+  done: string;
+}
+
+export const DEFAULT_SECRET_LABELS: SecretLabels = {
+  ...DEFAULT_COPY_LABELS,
+  title: "Your new secret",
+  warning: "Copy it now. It will not be shown again.",
+  download: "Download",
+  done: "I have saved it",
+};
+
+export function secretDownload(name: string, value: string): string {
+  return `data:text/plain;charset=utf-8,${encodeURIComponent(value)}`;
+}
+
+component SecretReveal(value: string, filename?: string, doneHref: string, labels?: SecretLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_SECRET_LABELS
+  view {
+    <div role="alert" data-slot="secret-reveal" class={cn("border-chart-4/40 bg-chart-4/5 flex flex-col gap-3 rounded-xl border p-4", attrs.class)} {...attrs}>
+      <div class="flex items-start gap-3">
+        <Icon name="key" class="text-chart-4 mt-0.5 size-5" />
+        <div class="flex flex-col gap-0.5">
+          <p class="font-medium">{l.title}</p>
+          <p class="text-muted-foreground text-sm">{l.warning}</p>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <input readonly value={value} aria-label={l.title} class={cn(inputClass, "font-mono text-xs")} />
+        <div class="flex gap-2">
+          <CopyButton value={value} labels={l} />
+          <a href={secretDownload(filename ?? "secret.txt", value)} download={filename ?? "secret.txt"} class={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Icon name="download" />
+            {l.download}
+          </a>
+        </div>
+      </div>
+      <a href={doneHref} class={cn(buttonVariants({ size: "sm" }), "self-end")}>{l.done}</a>
+    </div>
+  }
+}
+
+export interface ConfirmLabels {
+  title: string;
+  description: string;
+  prompt: string;
+  confirm: string;
+  cancel: string;
+}
+
+component ConfirmAction(id: string, expected: string, onConfirm: (e: WeftEvent) => unknown, labels: ConfirmLabels, children: Html, ...attrs: Attrs) {
+  signal typed = ""
+  derived ok = typed.trim() === expected
+  function onInput(e: WeftEvent) {
+    typed = String(e.value ?? "")
+  }
+  function submit(e: WeftEvent) {
+    if (typed.trim() !== expected) return
+    typed = ""
+    return onConfirm(e)
+  }
+  view {
+    <button type="button" commandfor={id} command="show-modal" class={cn(buttonVariants({ variant: "destructive" }), attrs.class)}>{children}</button>
+    <dialog id={id} aria-labelledby={id + "-title"} aria-describedby={id + "-description"} class="bg-background text-foreground backdrop:bg-background/70 backdrop:backdrop-blur-sm fixed top-1/2 left-1/2 m-0 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg open:grid sm:max-w-md" {...attrs}>
+      <h2 id={id + "-title"} class="text-lg font-semibold">{labels.title}</h2>
+      <p id={id + "-description"} class="text-muted-foreground text-sm">{labels.description}</p>
+      <form class="flex flex-col gap-3" @submit.prevent={submit}>
+        <label for={id + "-input"} class="text-sm">
+          {labels.prompt}
+          <code class="bg-muted ms-1 rounded px-1 font-mono text-xs">{expected}</code>
+        </label>
+        <input id={id + "-input"} name="confirm" autocomplete="off" spellcheck="false" class={inputClass} value={typed} @input={onInput} />
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" commandfor={id} command="close" class={buttonVariants({ variant: "outline" })}>{labels.cancel}</button>
+          <button type="submit" class={buttonVariants({ variant: "destructive" })} disabled={!ok} :busy>{labels.confirm}</button>
+        </div>
+      </form>
+    </dialog>
+  }
+}

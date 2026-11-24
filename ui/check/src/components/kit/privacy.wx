@@ -1,0 +1,194 @@
+import type { WeftEvent } from "@weft-framework/runtime";
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { Icon } from "./icons.wx";
+
+export interface ConsentPurpose {
+  id: string;
+  title: string;
+  description: string;
+  required?: boolean;
+}
+
+export interface PrivacyLabels {
+  title: string;
+  description: string;
+  required: string;
+  save: string;
+  saved: string;
+  acceptAll: string;
+  rejectAll: string;
+  customise: string;
+  policy: string;
+  exportTitle: string;
+  exportHint: string;
+  exportAction: string;
+  eraseTitle: string;
+  eraseHint: string;
+  eraseAction: string;
+  pending: string;
+  eraseConfirm: string;
+  cancel: string;
+}
+
+export const DEFAULT_PRIVACY_LABELS: PrivacyLabels = {
+  title: "Privacy",
+  description: "Choose what we may use your data for. You can change this at any time.",
+  required: "Always on",
+  save: "Save choices",
+  saved: "Saved",
+  acceptAll: "Accept all",
+  rejectAll: "Only necessary",
+  customise: "Choose",
+  policy: "Privacy policy",
+  exportTitle: "Download your data",
+  exportHint: "Get a copy of the personal data we hold about you.",
+  exportAction: "Download",
+  eraseTitle: "Delete your account",
+  eraseHint: "We remove your personal data. A member of staff confirms the request first.",
+  eraseAction: "Request deletion",
+  pending: "Request pending",
+  eraseConfirm: "Yes, delete my account",
+  cancel: "Cancel",
+};
+
+export type ConsentMap = Record<string, boolean>;
+
+component ConsentSettings(purposes: ConsentPurpose[], current: () => ConsentMap, onSave: (choices: ConsentMap) => Promise<unknown>, exportHref?: string, onErase?: () => Promise<unknown>, erasePending?: () => boolean, labels?: PrivacyLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_PRIVACY_LABELS
+  derived state = current()
+  derived pending = erasePending ? erasePending() : false
+  signal saved = false
+  signal confirming = false
+  function save(e: WeftEvent) {
+    const choices: ConsentMap = {}
+    for (const p of purposes) choices[p.id] = p.required === true || e.form?.[p.id] === "on"
+    saved = false
+    return onSave(choices).then(() => {
+      saved = true
+    })
+  }
+  function ask() {
+    confirming = true
+  }
+  function keep() {
+    confirming = false
+  }
+  function erase() {
+    confirming = false
+    return onErase ? onErase() : Promise.resolve()
+  }
+  view {
+    <section aria-label={l.title} data-slot="consent-settings" class={cn("flex flex-col gap-6", attrs.class)} {...attrs}>
+      <form @submit.prevent={save} class="flex flex-col gap-4 rounded-xl border p-5">
+        <div class="flex flex-col gap-1">
+          <h2 class="text-base font-semibold">{l.title}</h2>
+          <p class="text-muted-foreground text-sm">{l.description}</p>
+        </div>
+        <ul class="divide-y">
+          {#each purposes as p (p.id)}
+            <li class="flex items-start justify-between gap-4 py-3">
+              <label for={`consent-${p.id}`} class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium">{p.title}</span>
+                <span class="text-muted-foreground text-xs">{p.description}</span>
+              </label>
+              {#if p.required}
+                <span class="text-muted-foreground shrink-0 text-xs">{l.required}</span>
+              {:else}
+                <input id={`consent-${p.id}`} type="checkbox" role="switch" name={p.id} checked={state[p.id] === true} class="accent-primary mt-1 size-4 shrink-0" />
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <div class="flex items-center gap-3">
+          <button type="submit" :busy class={buttonVariants({ size: "sm" })}>{l.save}</button>
+          {#if saved}
+            <span role="status" class="text-muted-foreground inline-flex items-center gap-1 text-xs"><Icon name="check" />{l.saved}</span>
+          {/if}
+        </div>
+      </form>
+      {#if exportHref}
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-5">
+          <div class="flex flex-col gap-0.5">
+            <h3 class="text-sm font-medium">{l.exportTitle}</h3>
+            <p class="text-muted-foreground text-xs">{l.exportHint}</p>
+          </div>
+          <a href={exportHref} download="" class={buttonVariants({ variant: "outline", size: "sm" })}><Icon name="download" />{l.exportAction}</a>
+        </div>
+      {/if}
+      {#if onErase}
+        <div class="border-destructive/40 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-5">
+          <div class="flex flex-col gap-0.5">
+            <h3 class="text-sm font-medium">{l.eraseTitle}</h3>
+            <p class="text-muted-foreground text-xs">{l.eraseHint}</p>
+          </div>
+          {#if pending}
+            <span role="status" class="text-muted-foreground text-xs">{l.pending}</span>
+          {:else if confirming}
+            <div class="flex gap-2">
+              <button type="button" @click={keep} class={buttonVariants({ variant: "ghost", size: "sm" })}>{l.cancel}</button>
+              <button type="button" :busy @click={erase} class={buttonVariants({ variant: "destructive", size: "sm" })}>{l.eraseConfirm}</button>
+            </div>
+          {:else}
+            <button type="button" @click={ask} class={buttonVariants({ variant: "outline", size: "sm" })}><Icon name="trash" />{l.eraseAction}</button>
+          {/if}
+        </div>
+      {/if}
+    </section>
+  }
+}
+
+component ConsentBanner(purposes: ConsentPurpose[], onDecide: (choices: ConsentMap) => Promise<unknown>, policyHref?: string, labels?: PrivacyLabels, ...attrs: Attrs) {
+  derived l = labels ?? DEFAULT_PRIVACY_LABELS
+  signal open = true
+  signal choosing = false
+  function decide(all: boolean) {
+    const choices: ConsentMap = {}
+    for (const p of purposes) choices[p.id] = all || p.required === true
+    return onDecide(choices).then(() => {
+      open = false
+    })
+  }
+  function custom(e: WeftEvent) {
+    const choices: ConsentMap = {}
+    for (const p of purposes) choices[p.id] = p.required === true || e.form?.[p.id] === "on"
+    return onDecide(choices).then(() => {
+      open = false
+    })
+  }
+  function choose() {
+    choosing = true
+  }
+  view {
+    {#if open}
+      <aside role="region" aria-label={l.title} data-slot="consent-banner" class={cn("bg-card text-card-foreground fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-2xl flex-col gap-3 rounded-xl border p-4 shadow-lg", attrs.class)} {...attrs}>
+        <p class="text-sm">
+          {l.description}
+          {#if policyHref}
+            <a href={policyHref} class="ms-1 underline underline-offset-4">{l.policy}</a>
+          {/if}
+        </p>
+        {#if choosing}
+          <form @submit.prevent={custom} class="flex flex-col gap-2">
+            {#each purposes as p (p.id)}
+              <label class="flex items-start gap-2 text-sm">
+                <input type="checkbox" name={p.id} checked={p.required === true} disabled={p.required === true} class="accent-primary mt-0.5 size-4" />
+                <span class="flex flex-col">
+                  <span class="font-medium">{p.title}</span>
+                  <span class="text-muted-foreground text-xs">{p.description}</span>
+                </span>
+              </label>
+            {/each}
+            <button type="submit" :busy class={cn(buttonVariants({ size: "sm" }), "self-end")}>{l.save}</button>
+          </form>
+        {:else}
+          <div class="flex flex-wrap justify-end gap-2">
+            <button type="button" @click={choose} class={buttonVariants({ variant: "ghost", size: "sm" })}>{l.customise}</button>
+            <button type="button" :busy @click={decide(false)} class={buttonVariants({ variant: "outline", size: "sm" })}>{l.rejectAll}</button>
+            <button type="button" :busy @click={decide(true)} class={buttonVariants({ size: "sm" })}>{l.acceptAll}</button>
+          </div>
+        {/if}
+      </aside>
+    {/if}
+  }
+}

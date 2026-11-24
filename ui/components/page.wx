@@ -1,0 +1,121 @@
+import { cn } from "../../lib/utils.ts";
+import { buttonVariants } from "../ui/button.wx";
+import { Icon } from "./icons.wx";
+
+component PageHeader(title: string, description?: string, actions?: Html, tabs?: Html, ...attrs: Attrs) {
+  view {
+    <header data-slot="page-header" class={cn("flex flex-col gap-5", attrs.class)} {...attrs}>
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="flex min-w-0 flex-col gap-1.5">
+          <h1 class="truncate text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{title}</h1>
+          {#if description}
+            <p class="text-muted-foreground max-w-3xl text-sm leading-6">{description}</p>
+          {/if}
+        </div>
+        {#if actions}
+          <div class="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        {/if}
+      </div>
+      {#if tabs}
+        <nav class="flex gap-1 overflow-x-auto border-b [scrollbar-width:none]">{tabs}</nav>
+      {/if}
+    </header>
+  }
+}
+
+component PageTab(href: string, active?: boolean, children: Html, ...attrs: Attrs) {
+  view {
+    <a href={href} aria-current={active ? "page" : undefined} data-active={active ? "true" : "false"} class={cn("text-muted-foreground hover:text-foreground data-[active=true]:text-foreground data-[active=true]:border-primary -mb-px flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 pt-1 pb-2.5 text-sm font-medium whitespace-nowrap transition-colors", attrs.class)} {...attrs}>{children}</a>
+  }
+}
+
+component EmptyState(title: string, description?: string, icon?: string, actionLabel?: string, actionHref?: string, children?: Html, ...attrs: Attrs) {
+  view {
+    <div data-slot="empty-state" class={cn("bg-card flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center md:py-16", attrs.class)} {...attrs}>
+      <div class="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-2xl">
+        <Icon name={icon ?? "folder"} class="size-5" />
+      </div>
+      <div class="flex max-w-sm flex-col gap-1">
+        <h3 class="text-base font-semibold">{title}</h3>
+        {#if description}
+          <p class="text-muted-foreground text-sm text-balance">{description}</p>
+        {/if}
+      </div>
+      {#if actionLabel && actionHref}
+        <a href={actionHref} class={buttonVariants({ size: "sm" })}>
+          <Icon name="plus" />
+          {actionLabel}
+        </a>
+      {/if}
+      {#if children}
+        {children}
+      {/if}
+    </div>
+  }
+}
+
+component ErrorState(title: string, description?: string, retryLabel?: string, retryHref?: string, detail?: string, ...attrs: Attrs) {
+  view {
+    <div role="alert" data-slot="error-state" class={cn("border-destructive/30 bg-destructive/5 flex flex-col items-center justify-center gap-3 rounded-2xl border p-8 text-center", attrs.class)} {...attrs}>
+      <div class="bg-destructive/10 text-destructive flex size-12 items-center justify-center rounded-2xl">
+        <Icon name="alert" class="size-5" />
+      </div>
+      <h3 class="text-base font-semibold">{title}</h3>
+      {#if description}
+        <p class="text-muted-foreground max-w-sm text-sm">{description}</p>
+      {/if}
+      {#if detail}
+        <code class="bg-muted text-muted-foreground max-w-full truncate rounded-md px-2 py-1 font-mono text-xs">{detail}</code>
+      {/if}
+      {#if retryLabel && retryHref}
+        <a href={retryHref} class={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Icon name="refresh" />
+          {retryLabel}
+        </a>
+      {/if}
+    </div>
+  }
+}
+
+component LoadingState(label: string, rows?: number, ...attrs: Attrs) {
+  derived lines = Array.from({ length: Math.max(1, Math.min(rows ?? 3, 12)) }, (_, i) => i)
+  view {
+    <div role="status" aria-live="polite" aria-busy="true" data-slot="loading-state" class={cn("flex flex-col gap-3", attrs.class)} {...attrs}>
+      <span class="sr-only">{label}</span>
+      {#each lines as i (i)}
+        <div class={cn("bg-muted h-4 animate-pulse rounded motion-reduce:animate-none", i % 3 === 2 ? "w-2/3" : "w-full")} aria-hidden="true"></div>
+      {/each}
+    </div>
+  }
+}
+
+component NotFoundPage(brand: string, code: string, title: string, lead: string, home: string, help?: string, helpHref?: string) {
+  view {
+    <div class="bg-background relative flex min-h-dvh flex-col overflow-hidden">
+      <header class="relative mx-auto flex w-full max-w-6xl items-center px-6 py-6">
+        <a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight">
+          <span class="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-lg text-sm">{brand.slice(0, 1).toUpperCase()}</span>
+          {brand}
+        </a>
+      </header>
+      <main id="main" class="relative mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center gap-6 px-6 pb-24 text-center">
+        <span class="bg-card text-muted-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-xs">
+          <span class="bg-primary size-1.5 rounded-full"></span>{code}
+        </span>
+        <div class="bg-primary/10 text-primary flex size-14 items-center justify-center rounded-2xl">
+          <Icon name="search" class="size-6" />
+        </div>
+        <div class="flex flex-col gap-3">
+          <h1 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h1>
+          <p class="text-muted-foreground leading-relaxed text-pretty">{lead}</p>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <a href="/" class={buttonVariants({}) + " gap-2"}><Icon name="home" />{home}</a>
+          {#if help && helpHref}
+            <a href={helpHref} class={buttonVariants({ variant: "outline" }) + " gap-2"}>{help}<Icon name="arrow-right" /></a>
+          {/if}
+        </div>
+      </main>
+    </div>
+  }
+}

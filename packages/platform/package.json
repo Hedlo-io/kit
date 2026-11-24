@@ -1,0 +1,33 @@
+{
+  "name": "@kit/platform",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Loom/Bolt platform: UI slots, widgets, dashboard layouts, navigation, plugins, branding, content",
+  "exports": {
+    ".": "./src/index.ts",
+    "./slots": "./src/slots.ts",
+    "./widgets": "./src/widgets.ts",
+    "./layouts": "./src/layouts.ts"
+  },
+  "scripts": {
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "dependencies": {
+    "@weft-framework/core": "^0.0.6",
+    "@weft-framework/data": "^0.0.6",
+    "@weft-framework/runtime": "^0.0.6",
+    "@weft-framework/server": "^0.0.6",
+    "@weft-framework/theme": "^0.0.6",
+    "@weft-framework/i18n": "^0.0.6"
+  },
+  "peerDependencies": {
+    "@hedlo/market": "*"
+  },
+  "peerDependenciesMeta": {
+    "@hedlo/market": {
+      "optional": true
+    }
+  }
+}
